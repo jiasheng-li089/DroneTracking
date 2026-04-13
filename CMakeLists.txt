@@ -17,7 +17,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Find Qt6 components
-find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets REQUIRED)
+find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets OpenGLWidgets REQUIRED)
 
 # LibDataChannel for WebRTC
 # We use FetchContent to integrate a lightweight C/C++ WebRTC library,
@@ -34,6 +34,10 @@ set(NO_EXAMPLES ON CACHE BOOL "Disable examples" FORCE)
 set(NO_TESTS ON CACHE BOOL "Disable tests" FORCE)
 FetchContent_MakeAvailable(libdatachannel)
 
+# include(CMake/external_json.cmake)
+# add_subdirectory(third_party/tclap)
+# add_subdirectory(third_party/rsutils)
+
 file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.cpp"
     "src/*.c"
@@ -41,9 +45,15 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.hpp"
 )
 
+list(REMOVE_ITEM ALL_SOURCE_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/rs-hello-realsense.cpp"
+)
+
 
 # Application Executable
-add_executable(${PROJECT_NAME} ${ALL_SOURCE_FILES})
+add_executable("${PROJECT_NAME}-hello" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/rs-hello-realsense.cpp)
+add_executable("${PROJECT_NAME}-main" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 
 message("current directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 # Include directories
@@ -56,11 +66,22 @@ link_directories(
 
 
 # Target linking
-target_link_libraries(${PROJECT_NAME} PRIVATE
+target_link_libraries("${PROJECT_NAME}-main" PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
     Qt6::WebSockets
+    Qt6::OpenGLWidgets
+    datachannel
+    ${REALSENSE_LIBRARIES}
+)
+
+target_link_libraries("${PROJECT_NAME}-hello" PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::WebSockets
+    Qt6::OpenGLWidgets
     datachannel
     ${REALSENSE_LIBRARIES}
 )
