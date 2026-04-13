@@ -1,0 +1,35 @@
+#pragma once
+
+#include <string>
+#include <functional>
+#include <memory>
+#include <QJsonObject>
+
+// Forward declarations
+namespace rtc {
+    class PeerConnection;
+    class DataChannel;
+}
+class WebSocketClient;
+
+class WebRtcManager {
+public:
+    WebRtcManager();
+    ~WebRtcManager();
+
+    // Pass the WebSocketClient to handle signaling (SDP and ICE candidates)
+    void initialize(WebSocketClient* signalingClient);
+    
+    // Callback to alert UI or app when a data channel message arrives
+    void setOnMessageCallback(std::functional<void(const std::string&)> callback);
+    
+    // Send message via DataChannel
+    void sendMessage(const std::string& message);
+
+private:
+    std::shared_ptr<rtc::PeerConnection> m_peerConnection;
+    std::shared_ptr<rtc::DataChannel> m_dataChannel;
+    
+    std::functional<void(const std::string&)> m_onMessageCallback;
+    WebSocketClient* m_signalingClient;
+};
