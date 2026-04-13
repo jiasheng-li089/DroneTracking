@@ -1,6 +1,6 @@
-#include "gui/MainWindow.h"
-#include "network/WebSocketClient.h"
-#include "network/WebRtcManager.h"
+#include "MainWindow.h"
+#include "../network/WebSocketClient.h"
+#include "../network/WebRtcManager.h"
 #include <QWidget>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -59,7 +59,7 @@ void MainWindow::onConnectSignalingClicked() {
 void MainWindow::onStartWebRtcClicked() {
     appendLog("Initializing WebRTC connection...");
     m_webRtcManager->initialize(m_webSocketClient.get());
-    
+
     m_webRtcManager->setOnMessageCallback([this](const std::string& msg) {
         QMetaObject::invokeMethod(this, [this, msg]() {
             appendLog(QString("WebRTC Data Channel: %1").arg(QString::fromStdString(msg)));

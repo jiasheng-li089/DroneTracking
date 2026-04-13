@@ -1,5 +1,5 @@
-#include "network/WebRtcManager.h"
-#include "network/WebSocketClient.h"
+#include "WebRtcManager.h"
+#include "WebSocketClient.h"
 #include <rtc/rtc.hpp>
 #include <iostream>
 #include <QJsonDocument>
@@ -18,9 +18,9 @@ void WebRtcManager::initialize(WebSocketClient* signalingClient) {
     rtc::Configuration config;
     // Public Google STUN server for NAT traversal
     config.iceServers.emplace_back(rtc::IceServer{"stun:stun.l.google.com:19302"});
-    
+
     m_peerConnection = std::make_shared<rtc::PeerConnection>(config);
-    
+
     m_peerConnection->onStateChange([](rtc::PeerConnection::State state) {
         std::cout << "WebRTC State: " << state << std::endl;
     });
@@ -72,7 +72,7 @@ void WebRtcManager::initialize(WebSocketClient* signalingClient) {
     });
 }
 
-void WebRtcManager::setOnMessageCallback(std::functional<void(const std::string&)> callback) {
+void WebRtcManager::setOnMessageCallback(std::function<void(const std::string&)> callback) {
     m_onMessageCallback = std::move(callback);
 }
 

@@ -1,4 +1,4 @@
-#include "network/WebSocketClient.h"
+#include "WebSocketClient.h"
 
 WebSocketClient::WebSocketClient(QObject *parent)
     : QObject(parent)

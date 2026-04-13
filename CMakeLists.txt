@@ -19,7 +19,7 @@ set(CMAKE_AUTOUIC ON)
 # Find Qt6 components
 find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets REQUIRED)
 
-# LibDataChannel for WebRTC 
+# LibDataChannel for WebRTC
 # We use FetchContent to integrate a lightweight C/C++ WebRTC library,
 # which avoids the complexity of building Google's large WebRTC codebase.
 include(FetchContent)
@@ -34,9 +34,11 @@ set(NO_EXAMPLES ON CACHE BOOL "Disable examples" FORCE)
 set(NO_TESTS ON CACHE BOOL "Disable tests" FORCE)
 FetchContent_MakeAvailable(libdatachannel)
 
-file(GLOB_RECURSE ALL_SOURCE_FILES 
+file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.cpp"
     "src/*.c"
+    "src/*.h"
+    "src/*.hpp"
 )
 
 
@@ -47,13 +49,9 @@ message("current directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 # Include directories
 include_directories(
     ${REALSENSE_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/drone_tracking
 )
 link_directories(
     ${REALSENSE_LIBRARY_DIRS}
-)
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/drone_tracking
 )
 
 
