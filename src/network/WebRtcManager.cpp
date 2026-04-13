@@ -1,5 +1,5 @@
-#include "WebRtcManager.h"
-#include "WebSocketClient.h"
+#include "network/WebRtcManager.h"
+#include "network/WebSocketClient.h"
 #include <rtc/rtc.hpp>
 #include <iostream>
 #include <QJsonDocument>

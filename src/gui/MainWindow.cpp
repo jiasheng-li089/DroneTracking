@@ -1,6 +1,6 @@
-#include "MainWindow.h"
-#include "../network/WebSocketClient.h"
-#include "../network/WebRtcManager.h"
+#include "gui/MainWindow.h"
+#include "network/WebSocketClient.h"
+#include "network/WebRtcManager.h"
 #include <QWidget>
 
 MainWindow::MainWindow(QWidget *parent)

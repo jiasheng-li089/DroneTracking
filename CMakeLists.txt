@@ -52,7 +52,7 @@ include_directories(
 link_directories(
     ${REALSENSE_LIBRARY_DIRS}
 )
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include/drone_tracking
 )
 
