@@ -1,5 +1,9 @@
 #include "RealSenseManager.h"
+
+#include <iostream>
 #include <QDebug>
+
+#include <librealsense2/rs.hpp>
 
 RealSenseManager::RealSenseManager(QObject* parent) : QObject(parent), m_running(false) {}
 
@@ -36,6 +40,8 @@ void RealSenseManager::stopCameras() {
     for (auto& t : m_threads) {
         if (t.joinable()) {
             t.join();
+        } else {
+            std::cout << "RealSense thread stopped and not joinable" << std::endl;
         }
     }
     m_threads.clear();

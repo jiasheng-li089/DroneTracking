@@ -1,77 +1,116 @@
 #include "PhotoCaptureWindow.h"
-#include <QWidget>
-#include "CameraWidget.h"
 #include "../camera/RealSenseManager.h"
+#include "CameraWidget.h"
+#include <QWidget>
 
 PhotoCaptureWindow::PhotoCaptureWindow(QWidget *parent)
-    : QMainWindow(parent),
-      m_rsManager(std::make_unique<RealSenseManager>())
-{
-    setupUi();
+    : QMainWindow(parent), m_rsManager(std::make_unique<RealSenseManager>()) {
+  setupUi();
 
-    connect(m_rsManager.get(), &RealSenseManager::frameReceived, this, &PhotoCaptureWindow::onFrameReceived);
-    connect(m_rsManager.get(), &RealSenseManager::errorOccurred, this, &PhotoCaptureWindow::onCameraError);
-
-    m_rsManager->startCameras();
+  connect(m_rsManager.get(), &RealSenseManager::frameReceived, this,
+          &PhotoCaptureWindow::onFrameReceived);
+  connect(m_rsManager.get(), &RealSenseManager::errorOccurred, this,
+          &PhotoCaptureWindow::onCameraError);
 }
 
 PhotoCaptureWindow::~PhotoCaptureWindow() = default;
 
 void PhotoCaptureWindow::setupUi() {
-    this->setWindowTitle("Drone Tracking Control");
-    this->resize(800, 600);
+  this->setWindowTitle("Drone Tracking Control");
+  this->resize(800, 600);
 
-    // ReSharper disable once CppDFAMemoryLeak
-    const auto centralWidget = new QWidget(this);
-    // ReSharper disable once CppDFAMemoryLeak
-    const auto layout = new QVBoxLayout(centralWidget);
+  const auto centralWidget = new QWidget(this);
+  const auto layout = new QVBoxLayout(centralWidget);
 
-    m_btnConnectSignaling = new QPushButton("Capture", centralWidget);
+  const auto button_layout = new QHBoxLayout();
+  m_start_btn = new QPushButton("Start", centralWidget);
+  m_stop_btn= new QPushButton("Stop", centralWidget);
+  m_capture_btn = new QPushButton("Capture", centralWidget);
 
-    m_logTextEdit = new QTextEdit(centralWidget);
-    m_logTextEdit->setMaximumHeight(150);
-    m_logTextEdit->setReadOnly(true);
+  button_layout->addWidget(m_start_btn);
+  button_layout->addWidget(m_stop_btn);
+  button_layout->addWidget(m_capture_btn);
 
-    m_camerasContainer = new QWidget(centralWidget);
-    m_camerasLayout = new QGridLayout(m_camerasContainer);
+  m_logTextEdit = new QTextEdit(centralWidget);
+  m_logTextEdit->setMaximumHeight(150);
+  m_logTextEdit->setReadOnly(true);
 
-    layout->addWidget(m_btnConnectSignaling);
-    layout->addWidget(m_camerasContainer);
-    layout->addWidget(m_logTextEdit);
+  const auto camera_widget = new QWidget(centralWidget);
+  m_camera_container = new QGridLayout(camera_widget);
 
-    this->setCentralWidget(centralWidget);
+  layout->addLayout(button_layout);
+  layout->addWidget(camera_widget);
+  layout->addWidget(m_logTextEdit);
 
-    connect(m_btnConnectSignaling, &QPushButton::clicked, this, &PhotoCaptureWindow::onCapturePhotos);
+  this->setCentralWidget(centralWidget);
+
+  connect(reinterpret_cast<QPushButton *>(m_camera_container), &QPushButton::clicked, this,
+          &PhotoCaptureWindow::onCapturePhotos);
+  connect(reinterpret_cast<QPushButton *>(m_start_btn), &QPushButton::clicked, this, &PhotoCaptureWindow::onStart);
+  connect(reinterpret_cast<QPushButton *>(m_stop_btn), &QPushButton::clicked, this, &PhotoCaptureWindow::onStop);
+
+  m_start_btn->setEnabled(true);
+  m_stop_btn->setEnabled(false);
+  m_capture_btn->setEnabled(false);
 }
 
-void PhotoCaptureWindow::onCapturePhotos() const {
-    appendLog("Capturing photos");
-    // Replace with your actual signaling server WebSocket URL
-    // TODO capture photos
+void PhotoCaptureWindow::onStart() {
+  appendLog("Start showing video from cameras");
+  // TODO
+  m_rsManager->startCameras();
+  m_start_btn->setEnabled(false);
+  m_stop_btn->setEnabled(true);
+  m_capture_btn->setEnabled(true);
 }
 
+void PhotoCaptureWindow::onStop() {
+  appendLog("Stop showing video from cameras");
+  m_rsManager->stopCameras();
 
-void PhotoCaptureWindow::appendLog(const QString& message) const {
-    m_logTextEdit->append(message);
-}
+  appendLog("Stop successfully");
 
-void PhotoCaptureWindow::onFrameReceived(int cameraId, const QImage& img) {
-    if (!m_cameraWidgets.contains(cameraId)) {
-        CameraWidget* widget = new CameraWidget(this);
-        widget->setMinimumSize(320, 240);
-        
-        int count = m_cameraWidgets.size();
-        int row = count / 2;
-        int col = count % 2;
-        m_camerasLayout->addWidget(widget, row, col);
-        
-        m_cameraWidgets.insert(cameraId, widget);
-        appendLog(QString("Detected new camera stream: ID %1").arg(cameraId));
+  QLayoutItem *child;
+  while ((child = m_camera_container->takeAt(0)) != nullptr) {
+    if (child->widget()) {
+      delete child->widget();
     }
-    
-    m_cameraWidgets[cameraId]->updateFrame(img);
+    delete child;
+  }
+
+  m_cameraWidgets.clear();
+
+  m_start_btn->setEnabled(true);
+  m_stop_btn->setEnabled(false);
+  m_capture_btn->setEnabled(false);
 }
 
-void PhotoCaptureWindow::onCameraError(const QString& err) {
-    appendLog(err);
+void PhotoCaptureWindow::onCapturePhotos() {
+  appendLog("Capturing photos");
+  // Replace with your actual signaling server WebSocket URL
+  // TODO capture photos
 }
+
+void PhotoCaptureWindow::appendLog(const QString &message) {
+  m_logTextEdit->append(message);
+}
+
+void PhotoCaptureWindow::onFrameReceived(int cameraId, const QImage &img) {
+  if (m_start_btn->isEnabled()) return;
+
+  if (!m_cameraWidgets.contains(cameraId)) {
+    CameraWidget *widget = new CameraWidget(this);
+    widget->setMinimumSize(320, 240);
+
+    int count = m_cameraWidgets.size();
+    int row = count / 2;
+    int col = count % 2;
+    m_camera_container->addWidget(widget, row, col);
+
+    m_cameraWidgets.insert(cameraId, widget);
+    appendLog(QString("Detected new camera stream: ID %1").arg(cameraId));
+  }
+
+  m_cameraWidgets[cameraId]->updateFrame(img);
+}
+
+void PhotoCaptureWindow::onCameraError(const QString &err) { appendLog(err); }

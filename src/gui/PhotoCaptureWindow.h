@@ -21,8 +21,10 @@ public:
     ~PhotoCaptureWindow() override;
 
 private slots:
-    void onCapturePhotos() const;
-    void appendLog(const QString& message) const;
+    void onStart();
+    void onStop();
+    void onCapturePhotos();
+    void appendLog(const QString& message);
 
     void onFrameReceived(int cameraId, const QImage& img);
     void onCameraError(const QString& err);
@@ -32,10 +34,12 @@ private:
 
     std::unique_ptr<RealSenseManager> m_rsManager;
 
-    QPushButton* m_btnConnectSignaling{};
     QTextEdit * m_logTextEdit{};
+    QWidget * m_start_btn{};
+    QWidget * m_stop_btn{};
+    QWidget * m_capture_btn{};
 
-    QWidget* m_camerasContainer{};
-    QGridLayout* m_camerasLayout{};
+    QGridLayout * m_camera_container{};
+
     QMap<int, CameraWidget*> m_cameraWidgets;
 };

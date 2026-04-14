@@ -5,7 +5,6 @@
 #include <thread>
 #include <atomic>
 #include <string>
-#include <librealsense2/rs.hpp>
 
 class RealSenseManager : public QObject {
     Q_OBJECT
