@@ -7,6 +7,8 @@
 #include <QMap>
 #include <memory>
 
+#include <librealsense2/rs.hpp>
+
 #include "../media/PhotoCaptureTask.h"
 
 class CameraWidget;
@@ -28,8 +30,7 @@ private slots:
     void onCapturePhotos();
     void appendLog(const QString& message);
 
-    void onFrameReceived(int cameraId, std::string serial, const QImage& img);
-    void onInfraFramesCaptured(int cameraId, std::string serial, const QImage& ir1, const QImage& ir2);
+    void onFrameReceived(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
     void onCaptureComplete(bool success, const QString& message);
     void onCameraError(const QString& err);
 

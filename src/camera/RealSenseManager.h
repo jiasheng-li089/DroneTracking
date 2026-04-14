@@ -6,6 +6,8 @@
 #include <atomic>
 #include <string>
 
+#include <librealsense2/rs.hpp>
+
 class RealSenseManager : public QObject {
     Q_OBJECT
 public:
@@ -17,8 +19,7 @@ public:
     void captureInfraPhotos();
 
 signals:
-    void frameReceived(int cameraId, std::string serial, const QImage& image);
-    void infraFramesCaptured(int cameraId, std::string serial, const QImage& ir1, const QImage& ir2);
+    void framesReceived(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
     void errorOccurred(const QString& err);
 
 private:
