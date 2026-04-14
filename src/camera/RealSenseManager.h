@@ -16,7 +16,7 @@ public:
     void stopCameras();
 
 signals:
-    void frameReceived(int cameraId, const QImage& image);
+    void frameReceived(int cameraId, std::string serial, const QImage& image);
     void errorOccurred(const QString& err);
 
 private:

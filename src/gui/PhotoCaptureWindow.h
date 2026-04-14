@@ -26,7 +26,7 @@ private slots:
     void onCapturePhotos();
     void appendLog(const QString& message);
 
-    void onFrameReceived(int cameraId, const QImage& img);
+    void onFrameReceived(int cameraId, std::string serial, const QImage& img);
     void onCameraError(const QString& err);
 
 private:

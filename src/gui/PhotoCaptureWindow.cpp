@@ -94,7 +94,7 @@ void PhotoCaptureWindow::appendLog(const QString &message) {
   m_logTextEdit->append(message);
 }
 
-void PhotoCaptureWindow::onFrameReceived(int cameraId, const QImage &img) {
+void PhotoCaptureWindow::onFrameReceived(int cameraId, std::string serial, const QImage &img) {
   if (m_start_btn->isEnabled()) return;
 
   if (!m_cameraWidgets.contains(cameraId)) {

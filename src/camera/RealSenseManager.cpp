@@ -69,7 +69,7 @@ void RealSenseManager::cameraWorkerThread(int cameraId, std::string serial) {
                                QImage::Format_RGB888);
                     
                     // Emit deep copy so it thread-safely travels to the GUI thread
-                    emit frameReceived(cameraId, img.copy());
+                    emit frameReceived(cameraId, serial, img.copy());
                 }
             }
         }
