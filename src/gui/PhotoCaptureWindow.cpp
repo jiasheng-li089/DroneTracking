@@ -2,6 +2,7 @@
 #include "../camera/RealSenseManager.h"
 #include "CameraWidget.h"
 #include <QWidget>
+#include <QDateTime>
 
 PhotoCaptureWindow::PhotoCaptureWindow(QWidget *parent)
     : QMainWindow(parent), m_rsManager(std::make_unique<RealSenseManager>()) {
@@ -9,6 +10,8 @@ PhotoCaptureWindow::PhotoCaptureWindow(QWidget *parent)
 
   connect(m_rsManager.get(), &RealSenseManager::frameReceived, this,
           &PhotoCaptureWindow::onFrameReceived);
+  connect(m_rsManager.get(), &RealSenseManager::infraFramesCaptured, this,
+          &PhotoCaptureWindow::onInfraFramesCaptured);
   connect(m_rsManager.get(), &RealSenseManager::errorOccurred, this,
           &PhotoCaptureWindow::onCameraError);
 }
@@ -44,7 +47,7 @@ void PhotoCaptureWindow::setupUi() {
 
   this->setCentralWidget(centralWidget);
 
-  connect(reinterpret_cast<QPushButton *>(m_camera_container), &QPushButton::clicked, this,
+  connect(reinterpret_cast<QPushButton *>(m_capture_btn), &QPushButton::clicked, this,
           &PhotoCaptureWindow::onCapturePhotos);
   connect(reinterpret_cast<QPushButton *>(m_start_btn), &QPushButton::clicked, this, &PhotoCaptureWindow::onStart);
   connect(reinterpret_cast<QPushButton *>(m_stop_btn), &QPushButton::clicked, this, &PhotoCaptureWindow::onStop);
@@ -85,9 +88,22 @@ void PhotoCaptureWindow::onStop() {
 }
 
 void PhotoCaptureWindow::onCapturePhotos() {
-  appendLog("Capturing photos");
-  // Replace with your actual signaling server WebSocket URL
-  // TODO capture photos
+  if (m_cameraWidgets.isEmpty()) {
+      appendLog("No cameras available for capture.");
+      return;
+  }
+
+  QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+  QString targetDir = "captures/" + timestamp;
+
+  appendLog("Capturing photos to " + targetDir);
+
+  m_currentCaptureTask = std::make_shared<media::PhotoCaptureTask>(m_cameraWidgets.size(), targetDir.toStdString());
+  
+  connect(m_currentCaptureTask.get(), &media::PhotoCaptureTask::captureComplete,
+          this, &PhotoCaptureWindow::onCaptureComplete, Qt::QueuedConnection);
+
+  m_rsManager->captureInfraPhotos();
 }
 
 void PhotoCaptureWindow::appendLog(const QString &message) {
@@ -111,6 +127,21 @@ void PhotoCaptureWindow::onFrameReceived(int cameraId, std::string serial, const
   }
 
   m_cameraWidgets[cameraId]->updateFrame(img);
+}
+
+void PhotoCaptureWindow::onInfraFramesCaptured(int cameraId, std::string serial, const QImage& ir1, const QImage& ir2) {
+    if (m_currentCaptureTask) {
+        m_currentCaptureTask->capture_frames(serial, ir1, ir2);
+    }
+}
+
+void PhotoCaptureWindow::onCaptureComplete(bool success, const QString& message) {
+    if (success) {
+        appendLog(message);
+    } else {
+        appendLog("Error: " + message);
+    }
+    m_currentCaptureTask.reset();
 }
 
 void PhotoCaptureWindow::onCameraError(const QString &err) { appendLog(err); }

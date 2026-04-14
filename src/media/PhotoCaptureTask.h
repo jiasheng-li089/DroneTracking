@@ -1,33 +1,35 @@
-//
-// Created by jason on 14/04/26.
-//
-
 #ifndef DRONETRACKING_PHOTOCAPTURETASK_H
 #define DRONETRACKING_PHOTOCAPTURETASK_H
+
 #include <QImage>
-#include <set>
+#include <QObject>
+#include <map>
 #include <string>
 
 namespace media {
 
-class PhotoCaptureTask {
+struct CameraCapture {
+    QImage ir1;
+    QImage ir2;
+};
+
+class PhotoCaptureTask : public QObject {
+    Q_OBJECT
 public:
-  PhotoCaptureTask(int camera_count, std::string target_dir,
-                   std::string prefix);
+    PhotoCaptureTask(int camera_count, const std::string& target_dir, QObject* parent = nullptr);
+    ~PhotoCaptureTask() override;
 
-  ~PhotoCaptureTask();
+    void capture_frames(const std::string& serial, const QImage& ir1, const QImage& ir2);
 
-  bool capture_frame(std::string serial, QImage image);
+signals:
+    void captureComplete(bool success, const QString& message);
 
 private:
-  int camera_count = 0;
-  std::string target_dir;
-  std::string file_name_prefix;
-  std::set<std::string> camera_ids;
+    void process_and_save();
 
-  bool is_capturing;
-
-  void save_video_frame(std::string serial, QImage image);
+    int m_cameraCount = 0;
+    std::string m_targetDir;
+    std::map<std::string, CameraCapture> m_capturedFrames;
 };
 
 } // namespace media

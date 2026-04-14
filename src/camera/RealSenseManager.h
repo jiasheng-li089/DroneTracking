@@ -14,9 +14,11 @@ public:
 
     void startCameras();
     void stopCameras();
+    void captureInfraPhotos();
 
 signals:
     void frameReceived(int cameraId, std::string serial, const QImage& image);
+    void infraFramesCaptured(int cameraId, std::string serial, const QImage& ir1, const QImage& ir2);
     void errorOccurred(const QString& err);
 
 private:
@@ -24,4 +26,5 @@ private:
 
     std::vector<std::thread> m_threads;
     std::atomic<bool> m_running;
+    std::atomic<uint64_t> m_captureEpoch{0};
 };
