@@ -4,7 +4,16 @@ project(DroneTracking VERSION 0.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "Found ccache: ${CCACHE_PROGRAM}")
+else()
+    message(STATUS "ccache not found. Compilation will not be accelerated.")
+endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(REALSENSE REQUIRED realsense2)
 
@@ -62,6 +71,7 @@ endforeach()
 # Include directories
 include_directories(
     ${REALSENSE_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 link_directories(
     ${REALSENSE_LIBRARY_DIRS}

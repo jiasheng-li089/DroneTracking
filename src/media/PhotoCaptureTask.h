@@ -12,21 +12,24 @@ namespace media {
 
 class PhotoCaptureTask {
 public:
-    PhotoCaptureTask(int camera_count, std::string target_dir, std::string prefix);
+  PhotoCaptureTask(int camera_count, std::string target_dir,
+                   std::string prefix);
 
-    bool capture_frame(std::string serial, QImage image);
+  ~PhotoCaptureTask();
+
+  bool capture_frame(std::string serial, QImage image);
 
 private:
-    int camera_count = 0;
-    std::string target_dir;
-    std::string file_name_prefix;
-    std::set<std::string> camera_ids;
+  int camera_count = 0;
+  std::string target_dir;
+  std::string file_name_prefix;
+  std::set<std::string> camera_ids;
 
-    bool is_capturing;
+  bool is_capturing;
 
-    void save_video_frame(std::string serial, QImage image);
+  void save_video_frame(std::string serial, QImage image);
 };
 
-} // media
+} // namespace media
 
-#endif //DRONETRACKING_PHOTOCAPTURETASK_H
+#endif // DRONETRACKING_PHOTOCAPTURETASK_H
