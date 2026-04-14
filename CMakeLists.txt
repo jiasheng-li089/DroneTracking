@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 project(DroneTracking VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -45,17 +45,20 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.hpp"
 )
 
-list(REMOVE_ITEM ALL_SOURCE_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/rs-hello-realsense.cpp"
-)
+list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "src/.*_main\.cpp$")
 
+message("All source files: ${ALL_SOURCE_FILES}")
+
+set(TARGET_NAMES "PhotoCapturer" "Test")
+set(TARGET_MAINS "photo_capturer_main.cpp" "test_realsense_main.cpp")
 
 # Application Executable
-add_executable("${PROJECT_NAME}-hello" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/rs-hello-realsense.cpp)
-add_executable("${PROJECT_NAME}-main" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
+foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
+    message("adding target: ${key} with main file: ${value}")
+    add_executable("${PROJECT_NAME}_${key}" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/${value})
+endforeach()
 
-message("current directory: ${CMAKE_CURRENT_SOURCE_DIR}")
+
 # Include directories
 include_directories(
     ${REALSENSE_INCLUDE_DIRS}
@@ -64,24 +67,16 @@ link_directories(
     ${REALSENSE_LIBRARY_DIRS}
 )
 
+# Targets linking
+foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
+    target_link_libraries("${PROJECT_NAME}_${key}" PRIVATE
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Widgets
+            Qt6::WebSockets
+            Qt6::OpenGLWidgets
+            datachannel
+        ${REALSENSE_LIBRARIES}
+    )
+endforeach()
 
-# Target linking
-target_link_libraries("${PROJECT_NAME}-main" PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::WebSockets
-    Qt6::OpenGLWidgets
-    datachannel
-    ${REALSENSE_LIBRARIES}
-)
-
-target_link_libraries("${PROJECT_NAME}-hello" PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::WebSockets
-    Qt6::OpenGLWidgets
-    datachannel
-    ${REALSENSE_LIBRARIES}
-)

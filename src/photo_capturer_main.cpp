@@ -1,4 +1,4 @@
-#include "gui/MainWindow.h"
+#include "gui/PhotoCaptureWindow.h"
 #include <QApplication>
 #include <QSurfaceFormat> // Required for configuring OpenGL Widget
 
@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
 
     QApplication a(argc, argv);
 
-    MainWindow w;
+    PhotoCaptureWindow w;
     w.show();
 
     return a.exec();
