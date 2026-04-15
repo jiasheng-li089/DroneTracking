@@ -27,6 +27,7 @@ set(CMAKE_AUTOUIC ON)
 
 # Find Qt6 components
 find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets OpenGLWidgets REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d)
 
 # LibDataChannel for WebRTC
 # We use FetchContent to integrate a lightweight C/C++ WebRTC library,
@@ -58,8 +59,8 @@ list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "src/.*_main\.cpp$")
 
 message("All source files: ${ALL_SOURCE_FILES}")
 
-set(TARGET_NAMES "PhotoCapturer" "Test")
-set(TARGET_MAINS "photo_capturer_main.cpp" "test_realsense_main.cpp")
+set(TARGET_NAMES "PhotoCapturer" "Test" "CameraCalibration")
+set(TARGET_MAINS "photo_capturer_main.cpp" "test_realsense_main.cpp" "camera_calibration_main.cpp")
 
 # Application Executable
 foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
@@ -87,6 +88,6 @@ foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
             Qt6::OpenGLWidgets
             datachannel
         ${REALSENSE_LIBRARIES}
+        ${OpenCV_LIBS}
     )
 endforeach()
-
