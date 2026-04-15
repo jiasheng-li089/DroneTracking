@@ -20,7 +20,7 @@ public:
 
     void stop();
 private:
-    std::string m_serialNumber;
+    std::string m_serial_number;
 
     rs2::pipeline p;
 };

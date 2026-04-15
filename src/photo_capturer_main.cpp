@@ -1,6 +1,7 @@
 #include "gui/PhotoCaptureWindow.h"
 #include <QApplication>
 #include <QSurfaceFormat> // Required for configuring OpenGL Widget
+#include <QDir>
 
 int main(int argc, char *argv[]) {
     // QSurfaceFormat must be set BEFORE creating the QApplication instance.
@@ -11,7 +12,7 @@ int main(int argc, char *argv[]) {
 
     QApplication a(argc, argv);
 
-    PhotoCaptureWindow w;
+    PhotoCaptureWindow w(QDir::currentPath().toStdString() + "/captured_photos");
     w.show();
 
     return a.exec();

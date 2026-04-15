@@ -14,16 +14,15 @@ public:
     explicit RealSenseManager(QObject* parent = nullptr);
     ~RealSenseManager() override;
 
-    void startCameras();
-    void stopCameras();
-    void captureInfraPhotos();
+    void start_cameras();
+    void stop_cameras();
 
 signals:
-    void framesReceived(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
-    void errorOccurred(const QString& err);
+    void frames_received(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
+    void error_occurred(const QString& err);
 
 private:
-    void cameraWorkerThread(int cameraId, std::string serial);
+    void camera_worker_thread(int cameraId, std::string serial);
 
     std::vector<std::thread> m_threads;
     std::atomic<bool> m_running;

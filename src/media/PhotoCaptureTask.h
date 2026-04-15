@@ -4,32 +4,36 @@
 #include <QImage>
 #include <QObject>
 #include <map>
+#include <set>
 #include <string>
 
 namespace media {
 
-struct CameraCapture {
-    QImage ir1;
-    QImage ir2;
-};
-
 class PhotoCaptureTask : public QObject {
     Q_OBJECT
 public:
-    PhotoCaptureTask(int camera_count, const std::string& target_dir, QObject* parent = nullptr);
+    PhotoCaptureTask(const std::string target_dir, QObject* parent = nullptr);
     ~PhotoCaptureTask() override;
 
-    void capture_frames(const std::string& serial, const QImage& ir1, const QImage& ir2);
+    void on_frame(const std::string& serial, const QImage& ir_image);
+
+    void capture_frames(const std::set<std::string>& serials);
+
+    void finalize();
 
 signals:
-    void captureComplete(bool success, const QString& message);
+    void finalize_complete(bool success, const QString& message);
+
+    void update_capture_status(bool capturing);
 
 private:
-    void process_and_save();
+    bool process_and_save();
 
-    int m_cameraCount = 0;
-    std::string m_targetDir;
-    std::map<std::string, CameraCapture> m_capturedFrames;
+    const std::string m_target_dir;
+    std::map<std::string, std::vector<std::string>> m_captured_photo_paths;
+
+    std::set<std::string> m_captured_serials;
+    std::string m_start_capture_time;
 };
 
 } // namespace media

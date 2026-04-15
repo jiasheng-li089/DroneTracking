@@ -7,8 +7,8 @@ CameraWidget::CameraWidget(QWidget* parent) : QOpenGLWidget(parent) {
 
 CameraWidget::~CameraWidget() = default;
 
-void CameraWidget::updateFrame(const QImage& frame) {
-    m_currentFrame = frame;
+void CameraWidget::update_frame(const QImage& frame) {
+    m_current_frame = frame;
     update(); // Schedule a repaint
 }
 
@@ -18,9 +18,9 @@ void CameraWidget::paintEvent(QPaintEvent* event) {
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black); // Clear background to black
     
-    if (!m_currentFrame.isNull()) {
+    if (!m_current_frame.isNull()) {
         // Scaled to fit widget maintaining aspect ratio
-        QImage scaled = m_currentFrame.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        QImage scaled = m_current_frame.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         int x = (width() - scaled.width()) / 2;
         int y = (height() - scaled.height()) / 2;
         painter.drawImage(x, y, scaled);

@@ -9,11 +9,11 @@ public:
     ~CameraWidget() override;
 
 public slots:
-    void updateFrame(const QImage& frame);
+    void update_frame(const QImage& frame);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
 
 private:
-    QImage m_currentFrame;
+    QImage m_current_frame;
 };
