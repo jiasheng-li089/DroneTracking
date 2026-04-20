@@ -59,8 +59,18 @@ list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "src/.*_main\.cpp$")
 
 message("All source files: ${ALL_SOURCE_FILES}")
 
-set(TARGET_NAMES "PhotoCapturer" "Test" "CameraCalibration")
-set(TARGET_MAINS "photo_capturer_main.cpp" "test_realsense_main.cpp" "camera_calibration_main.cpp")
+set(TARGET_NAMES 
+    "PhotoCapturer" 
+    "Test" 
+    "CameraCalibration" 
+    "DroneTracking"
+)
+set(TARGET_MAINS 
+    "photo_capturer_main.cpp" 
+    "test_realsense_main.cpp" 
+    "camera_calibration_main.cpp" 
+    "drone_tracking_main.cpp"
+)
 
 # Application Executable
 foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
