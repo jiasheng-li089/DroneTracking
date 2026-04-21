@@ -14,9 +14,6 @@
 class CameraWidget;
 class RealSenseManager;
 
-class WebSocketClient;
-class WebRtcManager;
-
 class PhotoCaptureWindow : public QMainWindow {
     Q_OBJECT
 

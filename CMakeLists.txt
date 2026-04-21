@@ -44,6 +44,13 @@ set(NO_EXAMPLES ON CACHE BOOL "Disable examples" FORCE)
 set(NO_TESTS ON CACHE BOOL "Disable tests" FORCE)
 FetchContent_MakeAvailable(libdatachannel)
 
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.15.1
+)
+FetchContent_MakeAvailable(spdlog)
+
 # include(CMake/external_json.cmake)
 # add_subdirectory(third_party/tclap)
 # add_subdirectory(third_party/rsutils)
@@ -97,6 +104,7 @@ foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
             Qt6::WebSockets
             Qt6::OpenGLWidgets
             datachannel
+            spdlog::spdlog
         ${REALSENSE_LIBRARIES}
         ${OpenCV_LIBS}
     )

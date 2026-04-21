@@ -1,9 +1,7 @@
 #include "RealSenseManager.h"
+#include "logger.h"
 
 #include <librealsense2/h/rs_sensor.h>
-
-#include <QDebug>
-#include <iostream>
 #include <librealsense2/rs.hpp>
 
 RealSenseManager::RealSenseManager(QObject* parent) : QObject(parent), m_running(false) {}
@@ -40,7 +38,7 @@ void RealSenseManager::stop_cameras() {
         if (t.joinable()) {
             t.join();
         } else {
-            std::cout << "RealSense thread stopped and not joinable" << std::endl;
+            spdlog::warn("RealSense thread stopped and not joinable");
         }
     }
     m_threads.clear();

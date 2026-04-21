@@ -10,7 +10,7 @@ namespace rtc {
     class PeerConnection;
     class DataChannel;
 }
-class WebSocketClient;
+class WebSocketSignaling;
 
 class WebRtcManager {
 public:
@@ -18,7 +18,7 @@ public:
     ~WebRtcManager();
 
     // Pass the WebSocketClient to handle signaling (SDP and ICE candidates)
-    void initialize(WebSocketClient* signalingClient);
+    void initialize(WebSocketSignaling* signalingClient);
 
     // Callback to alert UI or app when a data channel message arrives
     void setOnMessageCallback(std::function<void(const std::string&)> callback);
@@ -31,5 +31,5 @@ private:
     std::shared_ptr<rtc::DataChannel> m_dataChannel;
 
     std::function<void(const std::string&)> m_onMessageCallback;
-    WebSocketClient* m_signalingClient;
+    WebSocketSignaling* m_signalingClient;
 };

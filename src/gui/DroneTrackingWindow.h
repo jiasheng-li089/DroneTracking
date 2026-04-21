@@ -10,6 +10,7 @@
 
 
 class RealSenseManager;
+class Signaling;
 
 class CameraWidget;
 
@@ -23,7 +24,13 @@ class DroneTrackingWindow : public QMainWindow {
     private:
         void setup_ui();
 
+        void start_tracking();
+
+        void stop_tracking();
+
         std::unique_ptr<RealSenseManager> m_rs_manager;
+        std::unique_ptr<Signaling> m_signaling;
+
 
         QWidget * m_start_camera_btn{};
         QWidget * m_stop_camera_btn{};
@@ -38,6 +45,10 @@ class DroneTrackingWindow : public QMainWindow {
 
         std::string m_config_file;
 
+    signals:
+        void update_widget_status(QWidget* sender, bool enable);
+        void append_log(const QString& message);
+
     private slots:
 
         void on_button_clicked(QWidget* sender);
@@ -45,4 +56,6 @@ class DroneTrackingWindow : public QMainWindow {
         void frames_received(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
         
         void error_occurred(const QString& err);
+
+        void on_widget_status_update(QWidget* sender, bool enable);
 };

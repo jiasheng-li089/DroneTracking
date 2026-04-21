@@ -1,6 +1,6 @@
 #include "PhotoCaptureTask.h"
+#include "logger.h"
 
-#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QXmlStreamWriter>
@@ -37,7 +37,7 @@ void PhotoCaptureTask::finalize() {
 void PhotoCaptureTask::on_frame(const std::string& serial, const QImage& ir_image) {
     if (m_captured_serials.find(serial) != m_captured_serials.end()) {
         if(!make_sure_dir_exists(QString::fromStdString(m_target_dir))) {
-            qDebug() << "Failed to create target directory:" << QString::fromStdString(m_target_dir);
+            spdlog::error("Failed to create target directory: {}", m_target_dir);
             return;
         }
         
@@ -47,9 +47,9 @@ void PhotoCaptureTask::on_frame(const std::string& serial, const QImage& ir_imag
 
         if (ir_image.save(filePath)) {
             m_captured_photo_paths[serial].push_back(filePath.toStdString());
-            qDebug() << "Captured photo for serial:" << QString::fromStdString(serial) << "saved to:" << filePath;
+            spdlog::info("Captured photo for serial: {} saved to: {}", serial, filePath.toStdString());
         } else {
-            qDebug() << "Failed to save photo for serial:" << QString::fromStdString(serial);
+            spdlog::error("Failed to save photo for serial: {}", serial);
         }
 
         m_captured_serials.erase(serial);
