@@ -8,8 +8,14 @@
 #include <future>
 #include <mutex>
 #include <thread>
+#include <QEventLoop>
+#include <QTimer>
 
 #include "Signling.h"
+
+
+class QEventLoop;
+class QTimer;
 
 class WebSocketSignaling : public QObject, public Signaling {
     Q_OBJECT
@@ -36,10 +42,15 @@ private:
     std::map<std::string, std::promise<std::string>> m_pending_offers;
     std::mutex m_pending_offers_mutex;
 
-    // Keep-alive
-    std::thread m_keepalive_thread;
-    std::atomic<bool> m_keepalive_running{false};
-    static constexpr std::chrono::seconds KEEPALIVE_INTERVAL{5};
+    // Event loop thread — all Qt objects below are owned by this thread
+    std::thread m_event_loop_thread;
+    QEventLoop* m_event_loop = nullptr;
+    QTimer* m_keepalive_timer = nullptr;
+    QObject* m_thread_context = nullptr;  // lives on event loop thread; used for invokeMethod dispatch
+    std::mutex m_thread_ready_mutex;
+    std::condition_variable m_thread_ready_cv;
+    bool m_thread_ready = false;
+
 
     bool initialize_websocket();
 
@@ -47,8 +58,9 @@ private:
 
     void release_websocket();
 
-    void start_keepalive();
-    void stop_keepalive();
+    void keep_alive_event();
+
+    void send_text_message(const QString &message);
 
     private slots:
         void on_connected();

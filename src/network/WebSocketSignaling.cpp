@@ -1,6 +1,5 @@
 #include "WebSocketSignaling.h"
 
-#include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMetaObject>
@@ -39,10 +38,10 @@ struct JanusReq {
         obj[FIELD_JANUS] = QString::fromStdString(janus);
         obj[FIELD_TRANSACTION] = QString::fromStdString(transaction);
         if (session_id != 0) {
-            obj[FIELD_SESSION_ID] = QString::number(session_id);
+            obj[FIELD_SESSION_ID] = static_cast<qint64>(session_id);
         }
         if (handle_id != 0) {
-            obj[FIELD_HANDLE_ID] = QString::number(handle_id);
+            obj[FIELD_HANDLE_ID] = static_cast<qint64>(handle_id);
         }
         if (!plugin.empty()) {
             obj[FIELD_PLUGIN] = QString::fromStdString(plugin);
@@ -104,7 +103,7 @@ struct JoinAndConfigureBody {
     QJsonObject toJsonObject() const {
         QJsonObject obj;
         obj["request"] = QString::fromStdString(request);
-        obj["room"] = QString::number(room);
+        obj["room"] = static_cast<qint64>(room);
         obj["pin"] = QString::fromStdString(VIDEO_ROOM_PIN);
         obj["ptype"] = QString::fromStdString(ptype);
         obj["display"] = QString::fromStdString(display);
@@ -128,10 +127,10 @@ struct JoinAndConfigureReq {
         obj[FIELD_JANUS] = QString::fromStdString(janus);
         obj[FIELD_TRANSACTION] = QString::fromStdString(transaction);
         if (session_id != 0) {
-            obj[FIELD_SESSION_ID] = QString::number(session_id);
+            obj[FIELD_SESSION_ID] = static_cast<qint64>(session_id);
         }
         if (handle_id != 0) {
-            obj[FIELD_HANDLE_ID] = QString::number(handle_id);
+            obj[FIELD_HANDLE_ID] = static_cast<qint64>(handle_id);
         }
         obj["body"] = body.toJsonObject();
         obj["jsep"] = jsep.toJsonObject();
@@ -189,12 +188,49 @@ struct PluginResp {
 
 WebSocketSignaling::WebSocketSignaling(std::string websocket_url, std::string subprotocol, QObject* parent)
     : QObject(parent), m_websocket_url(websocket_url), m_subprotocol(subprotocol) {
-    // Constructor implementation (if needed)
+    m_event_loop_thread = std::thread([this]() {
+        // All Qt objects must be created on the thread that runs the event loop
+        QObject thread_context;
+        QEventLoop event_loop;
+        QTimer keepalive_timer;
+
+        keepalive_timer.setInterval(20 * 1000);
+        QObject::connect(&keepalive_timer, &QTimer::timeout, [this]() { keep_alive_event(); });
+        keepalive_timer.start();
+
+        {
+            std::lock_guard<std::mutex> lock(m_thread_ready_mutex);
+            m_thread_context = &thread_context;
+            m_event_loop = &event_loop;
+            m_keepalive_timer = &keepalive_timer;
+            m_thread_ready = true;
+        }
+        m_thread_ready_cv.notify_one();
+
+        spdlog::debug("WebSocket event loop thread started");
+        event_loop.exec();
+        spdlog::debug("WebSocket event loop thread stopped");
+
+        m_thread_context = nullptr;
+        m_event_loop = nullptr;
+        m_keepalive_timer = nullptr;
+    });
+
+    // Wait until the thread has created its Qt objects
+    std::unique_lock<std::mutex> lock(m_thread_ready_mutex);
+    m_thread_ready_cv.wait(lock, [this]() { return m_thread_ready; });
 }
 
 WebSocketSignaling::~WebSocketSignaling() {
     m_pending_offers.clear();
     release_websocket();
+
+    if (m_event_loop) {
+        m_event_loop->quit();
+    }
+    if (m_event_loop_thread.joinable()) {
+        m_event_loop_thread.join();
+    }
 }
 
 void WebSocketSignaling::end() {
@@ -203,7 +239,7 @@ void WebSocketSignaling::end() {
         leave_req.janus = "leave";
         leave_req.session_id = m_session_id;
         leave_req.handle_id = m_handle_id;
-        m_websocket->sendTextMessage(QJsonDocument(leave_req.toJsonObject()).toJson(QJsonDocument::Compact));
+        send_text_message(QJsonDocument(leave_req.toJsonObject()).toJson(QJsonDocument::Compact));
     }
 
     if (0 != m_handle_id) {
@@ -211,14 +247,14 @@ void WebSocketSignaling::end() {
         detach_req.janus = "detach";
         detach_req.session_id = m_session_id;
         detach_req.handle_id = m_handle_id;
-        m_websocket->sendTextMessage(QJsonDocument(detach_req.toJsonObject()).toJson(QJsonDocument::Compact));
+        send_text_message(QJsonDocument(detach_req.toJsonObject()).toJson(QJsonDocument::Compact));
     }
 
     if (0 != m_session_id) {
         struct JanusReq destroy_req;
         destroy_req.janus = "destroy";
         destroy_req.session_id = m_session_id;
-        m_websocket->sendTextMessage(QJsonDocument(destroy_req.toJsonObject()).toJson(QJsonDocument::Compact));
+        send_text_message(QJsonDocument(destroy_req.toJsonObject()).toJson(QJsonDocument::Compact));
     }
 
     release_websocket();
@@ -246,7 +282,7 @@ std::string WebSocketSignaling::exchange_offer(const std::string& offer) {
         std::lock_guard<std::mutex> lock(m_pending_offers_mutex);
         m_pending_offers[req.transaction] = std::move(response_promise);
     }
-    m_websocket->sendTextMessage(QJsonDocument(req.toJsonObject()).toJson(QJsonDocument::Compact));
+    send_text_message(QJsonDocument(req.toJsonObject()).toJson(QJsonDocument::Compact));
 
     auto wait_status = response_future.wait_for(std::chrono::seconds(10));
     if (wait_status != std::future_status::ready) {
@@ -262,7 +298,8 @@ std::string WebSocketSignaling::exchange_offer(const std::string& offer) {
 
     auto message = response_future.get();
     spdlog::debug("Received response for offer exchange, transaction id: {}, message: {}", req.transaction, message);
-    PluginResp plugin_resp = PluginResp::fromJson(QJsonDocument::fromJson(QString::fromStdString(message).toUtf8()).object());
+    PluginResp plugin_resp =
+        PluginResp::fromJson(QJsonDocument::fromJson(QString::fromStdString(message).toUtf8()).object());
 
     if (0 == plugin_resp.error.code) {
         spdlog::debug("Offer exchange successful, remote answer: {}", plugin_resp.jsep.sdp);
@@ -291,87 +328,76 @@ bool WebSocketSignaling::initialize_websocket() {
 
     release_websocket();  // Ensure any existing connection is cleaned up
 
-    m_websocket = std::make_unique<QWebSocket>();
-
-    QNetworkRequest request(QUrl(QString::fromStdString(m_websocket_url)));
-    request.setRawHeader("Sec-WebSocket-Protocol", QString::fromStdString(m_subprotocol).toUtf8());
-
-    connect(m_websocket.get(), &QWebSocket::textMessageReceived, this, &WebSocketSignaling::on_text_message_received);
-    connect(m_websocket.get(), &QWebSocket::disconnected, this, &WebSocketSignaling::on_disconnected);
-    connect(m_websocket.get(), &QWebSocket::stateChanged, this, &WebSocketSignaling::on_state_changed);
-
-    QEventLoop loop;
-    connect(m_websocket.get(), &QWebSocket::connected, &loop, &QEventLoop::quit);
-    connect(m_websocket.get(), &QWebSocket::errorOccurred, &loop, &QEventLoop::quit);
-
-    m_websocket->open(request);
-
-    loop.exec();  // Wait for connection or error
-
-    if (m_websocket->state() != QAbstractSocket::ConnectedState) {
-        release_websocket();
-        return false;  // Connection failed
+    // Register the connection promise before opening the socket so on_connected can fulfill it
+    std::promise<std::string> connection_promise;
+    std::future<std::string> connection_future = connection_promise.get_future();
+    {
+        std::lock_guard<std::mutex> lock(m_pending_offers_mutex);
+        m_pending_offers["__connection__"] = std::move(connection_promise);
     }
 
-    connect(m_websocket.get(), &QWebSocket::errorOccurred, this, &WebSocketSignaling::on_error);
-    connect(m_websocket.get(), &QWebSocket::connected, this, &WebSocketSignaling::on_connected);
+    // QWebSocket must be created on the event loop thread so its signals are dispatched there
+    QMetaObject::invokeMethod(m_thread_context, [this]() {
+        m_websocket = std::make_unique<QWebSocket>();
 
-    start_keepalive();
+        QNetworkRequest request(QUrl(QString::fromStdString(m_websocket_url)));
+        request.setRawHeader("Sec-WebSocket-Protocol", QString::fromStdString(m_subprotocol).toUtf8());
+
+        // DirectConnection: slots run on the event loop thread (where the socket lives)
+        connect(m_websocket.get(), &QWebSocket::textMessageReceived, this,
+                &WebSocketSignaling::on_text_message_received, Qt::DirectConnection);
+        connect(m_websocket.get(), &QWebSocket::disconnected, this,
+                &WebSocketSignaling::on_disconnected, Qt::DirectConnection);
+        connect(m_websocket.get(), &QWebSocket::stateChanged, this,
+                &WebSocketSignaling::on_state_changed, Qt::DirectConnection);
+        connect(m_websocket.get(), &QWebSocket::errorOccurred, this,
+                &WebSocketSignaling::on_error, Qt::DirectConnection);
+        connect(m_websocket.get(), &QWebSocket::connected, this,
+                &WebSocketSignaling::on_connected, Qt::DirectConnection);
+
+        m_websocket->open(request);
+    }, Qt::BlockingQueuedConnection);
+
+    // Calling thread waits here; event loop thread processes TCP events and fulfills the promise
+    auto wait_status = connection_future.wait_for(std::chrono::seconds(10));
+    if (wait_status != std::future_status::ready) {
+        spdlog::error("Timeout waiting for WebSocket connection to be established");
+        std::lock_guard<std::mutex> lock(m_pending_offers_mutex);
+        m_pending_offers.erase("__connection__");
+    }
+
+    if (!m_websocket || m_websocket->state() != QAbstractSocket::ConnectedState) {
+        release_websocket();
+        return false;
+    }
 
     return true;
 }
 
 void WebSocketSignaling::release_websocket() {
-    if (m_websocket) {
-        stop_keepalive();
-        m_session_id = 0;
-        m_handle_id = 0;
-        m_websocket->abort();
-        disconnect(m_websocket.get(), nullptr, this, nullptr);  // Disconnect all signals
-        m_pending_offers.clear();
-        m_websocket.reset();
-        m_websocket = nullptr;
-    }
-}
+    if (!m_websocket) return;
 
-void WebSocketSignaling::start_keepalive() {
-    m_keepalive_running = true;
-    m_keepalive_thread = std::thread([this]() {
-        spdlog::debug("Keep-alive thread started");
-        while (m_keepalive_running) {
-            std::this_thread::sleep_for(KEEPALIVE_INTERVAL);
+    m_session_id = 0;
+    m_handle_id = 0;
+    m_pending_offers.clear();
 
-            if (!m_keepalive_running) break;
-
-            struct JanusReq keepalive_req;
-            keepalive_req.janus = "keepalive";
-
-            if (m_session_id != 0) {
-                keepalive_req.session_id = m_session_id;
-            } else {
-                continue;
-            }
-
-            QString payload = QJsonDocument(keepalive_req.toJsonObject()).toJson(QJsonDocument::Compact);
-
-            if (m_websocket == nullptr || m_websocket->state() != QAbstractSocket::ConnectedState) {
-                spdlog::warn("WebSocket is not connected, skipping keep-alive");
-                continue;
-            }
-
-            m_websocket->sendTextMessage(payload);
-
-            spdlog::debug("Sent keep-alive message: {}", payload.toStdString());
+    // Socket lives on the event loop thread; must be destroyed there
+    QMetaObject::invokeMethod(m_thread_context, [this]() {
+        if (m_websocket) {
+            m_websocket->abort();
+            disconnect(m_websocket.get(), nullptr, nullptr, nullptr);
+            m_websocket.reset();
         }
-        spdlog::debug("Keep-alive thread stopped");
-    });
+    }, Qt::BlockingQueuedConnection);
 }
 
-void WebSocketSignaling::stop_keepalive() {
-    m_keepalive_running = false;
-    if (m_keepalive_thread.joinable()) {
-        m_keepalive_thread.join();
-    }
+void WebSocketSignaling::keep_alive_event() {
+    if (m_session_id == 0) return;
+
+    struct JanusReq keepalive_req;
+    keepalive_req.janus = "keepalive";
+    keepalive_req.session_id = m_session_id;
+    send_text_message(QJsonDocument(keepalive_req.toJsonObject()).toJson(QJsonDocument::Compact));
 }
 
 bool WebSocketSignaling::make_sure_session_and_handle() {
@@ -391,7 +417,7 @@ bool WebSocketSignaling::make_sure_session_and_handle() {
             std::lock_guard<std::mutex> lock(m_pending_offers_mutex);
             m_pending_offers[create_session_req.transaction] = std::move(session_promise);
         }
-        m_websocket->sendTextMessage(QJsonDocument(json_msg).toJson(QJsonDocument::Compact));
+        send_text_message(QJsonDocument(json_msg).toJson(QJsonDocument::Compact));
 
         auto wait_status = session_response_future.wait_for(std::chrono::seconds(10));
         if (wait_status != std::future_status::ready) {
@@ -432,7 +458,7 @@ bool WebSocketSignaling::make_sure_session_and_handle() {
             std::lock_guard<std::mutex> lock(m_pending_offers_mutex);
             m_pending_offers[attach_req.transaction] = std::move(attach_promise);
         }
-        m_websocket->sendTextMessage(QJsonDocument(json_msg).toJson(QJsonDocument::Compact));
+        send_text_message(QJsonDocument(json_msg).toJson(QJsonDocument::Compact));
 
         auto wait_status = attach_response_future.wait_for(std::chrono::seconds(10));
         if (wait_status != std::future_status::ready) {
@@ -461,8 +487,34 @@ bool WebSocketSignaling::make_sure_session_and_handle() {
     return true;  // Placeholder return value
 }
 
+void WebSocketSignaling::send_text_message(const QString& message) {
+    // Socket lives on the event loop thread; dispatch there (QueuedConnection = non-blocking)
+    QMetaObject::invokeMethod(m_thread_context, [this, message]() {
+        if (m_websocket && m_websocket->state() == QAbstractSocket::ConnectedState) {
+            auto bytes = m_websocket->sendTextMessage(message);
+            m_websocket->flush();
+            if (bytes <= 0) {
+                spdlog::error("Failed to send text message: {}", message.toStdString());
+            } else {
+                spdlog::debug("Sent text message: {}", message.toStdString());
+            }
+        } else {
+            spdlog::error("Cannot send message, WebSocket is not connected: {}", message.toStdString());
+        }
+    }, Qt::QueuedConnection);
+}
+
 void WebSocketSignaling::on_connected() {
     // Handle WebSocket connected event
+    spdlog::info("WebSocket connected");
+    {
+        std::lock_guard<std::mutex> lock(m_pending_offers_mutex);
+        auto it = m_pending_offers.find("__connection__");
+        if (it != m_pending_offers.end()) {
+            it->second.set_value("connected");
+            m_pending_offers.erase(it);
+        }
+    }
 }
 
 void WebSocketSignaling::on_text_message_received(const QString& message) {
@@ -497,14 +549,26 @@ void WebSocketSignaling::on_text_message_received(const QString& message) {
 void WebSocketSignaling::on_disconnected() {
     // Handle WebSocket disconnected event
     spdlog::info("WebSocket disconnected");
+    {
+        std::lock_guard<std::mutex> lock(m_pending_offers_mutex);
+        for (auto& [transaction, promise] : m_pending_offers) {
+            promise.set_exception(std::make_exception_ptr(std::runtime_error("WebSocket disconnected")));
+        }
+        m_pending_offers.clear();
+    }
 }
 
 void WebSocketSignaling::on_state_changed(QAbstractSocket::SocketState state) {
-    // Handle WebSocket state change
-    spdlog::info("WebSocket state changed: {}", static_cast<int>(state));
+    static constexpr std::array<std::string_view, 7> stateNames = {
+        "UnconnectedState", "HostLookupState", "ConnectingState", "ConnectedState",
+        "BoundState",       "ClosingState",    "ListeningState"};
+    auto idx = static_cast<int>(state);
+    std::string_view name = (idx >= 0 && idx < static_cast<int>(stateNames.size())) ? stateNames[idx] : "UnknownState";
+    spdlog::info("WebSocket state changed({}): {}", static_cast<int>(state), name);
 }
 
 void WebSocketSignaling::on_error(QAbstractSocket::SocketError error) {
     // Handle WebSocket error
-    spdlog::error("WebSocket error occurred: {} ({})", m_websocket->errorString().toStdString(), static_cast<int>(error));
+    spdlog::error("WebSocket error occurred: {} ({})", m_websocket->errorString().toStdString(),
+                  static_cast<int>(error));
 }
