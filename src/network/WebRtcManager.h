@@ -4,21 +4,25 @@
 #include <functional>
 #include <memory>
 #include <QJsonObject>
+#include <QObject>
 
 // Forward declarations
 namespace rtc {
     class PeerConnection;
     class DataChannel;
 }
+
 class WebSocketSignaling;
 
-class WebRtcManager {
+class WebRtcManager : public QObject {
+    Q_OBJECT
 public:
-    WebRtcManager();
+    WebRtcManager(std::unique_ptr<WebSocketSignaling> signaling, QObject *parent = nullptr);
     ~WebRtcManager();
 
-    // Pass the WebSocketClient to handle signaling (SDP and ICE candidates)
-    void initialize(WebSocketSignaling* signalingClient);
+    void connect();
+
+    void disconnect();
 
     // Callback to alert UI or app when a data channel message arrives
     void setOnMessageCallback(std::function<void(const std::string&)> callback);
@@ -27,9 +31,13 @@ public:
     void sendMessage(const std::string& message);
 
 private:
-    std::shared_ptr<rtc::PeerConnection> m_peerConnection;
-    std::shared_ptr<rtc::DataChannel> m_dataChannel;
+    std::unique_ptr<rtc::PeerConnection> m_peer_connection;
+    std::shared_ptr<rtc::DataChannel> m_data_channel;
 
-    std::function<void(const std::string&)> m_onMessageCallback;
-    WebSocketSignaling* m_signalingClient;
+    std::function<void(const std::string&)> m_on_message_callback;
+
+    std::unique_ptr<WebSocketSignaling> m_signaling;
+
+    signals: 
+        void on_connection_state(bool connected);
 };

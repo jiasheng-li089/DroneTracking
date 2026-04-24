@@ -10,6 +10,7 @@
 
 
 class RealSenseManager;
+class WebRtcManager;
 class Signaling;
 
 class CameraWidget;
@@ -29,8 +30,7 @@ class DroneTrackingWindow : public QMainWindow {
         void stop_tracking();
 
         std::unique_ptr<RealSenseManager> m_rs_manager;
-        std::unique_ptr<Signaling> m_signaling;
-
+        std::unique_ptr<WebRtcManager> m_webrtc_manager;
 
         QWidget * m_start_camera_btn{};
         QWidget * m_stop_camera_btn{};
@@ -58,4 +58,6 @@ class DroneTrackingWindow : public QMainWindow {
         void error_occurred(const QString& err);
 
         void on_widget_status_update(QWidget* sender, bool enable);
+
+        void on_webrtc_connection_state(bool connected);
 };

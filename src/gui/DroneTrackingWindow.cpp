@@ -4,14 +4,19 @@
 #include <QPushButton>
 
 #include "../camera/RealSenseManager.h"
+#include "../network/WebRtcManager.h"
 #include "../network/WebSocketSignaling.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {
+
+    m_webrtc_manager = std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol"));
+
     setup_ui();
 
     connect(this, &DroneTrackingWindow::update_widget_status, this, &DroneTrackingWindow::on_widget_status_update);
     connect(this, &DroneTrackingWindow::append_log, m_log_te, &QTextEdit::append);
+    connect(m_webrtc_manager.get(), &WebRtcManager::on_connection_state, this, &DroneTrackingWindow::on_webrtc_connection_state);
 }
 
 DroneTrackingWindow::~DroneTrackingWindow() = default;
@@ -79,6 +84,20 @@ void DroneTrackingWindow::on_button_clicked(QWidget* sender) {
     }
 }
 
+void DroneTrackingWindow::on_webrtc_connection_state(bool connected) {
+    if (connected) {
+        m_log_te->append("WebRTC connection established");
+        on_widget_status_update(m_start_tracking_btn, false);
+        on_widget_status_update(m_stop_tracking_btn, true);
+    } else {
+        m_log_te->append("WebRTC connection lost");
+        on_widget_status_update(m_start_tracking_btn, true);
+        on_widget_status_update(m_stop_tracking_btn, false);
+    }
+
+
+}
+
 void DroneTrackingWindow::start_tracking() {
     m_log_te->append("Starting tracking...");
 
@@ -86,19 +105,14 @@ void DroneTrackingWindow::start_tracking() {
     on_widget_status_update(m_stop_tracking_btn, false);
 
     std::thread([this]() {
-        m_signaling = std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol");
 
         try {
-            auto answer = m_signaling->exchange_offer("dummy offer");
-
-            emit append_log("Received answer: " + QString::fromStdString(answer));
-
-            update_widget_status(m_stop_tracking_btn, true);
-            update_widget_status(m_start_tracking_btn, false);
-        } catch (const std::exception& e) {
-            emit append_log("Error during offer exchange: " + QString::fromStdString(e.what()));
-            update_widget_status(m_start_tracking_btn, true);
-            update_widget_status(m_stop_tracking_btn, false);
+            m_webrtc_manager->connect();
+        } catch (const std::exception& ex) {
+            emit append_log(QString("Error starting tracking: ") + QString::fromStdString(ex.what()));
+            on_widget_status_update(m_start_tracking_btn, true);
+            on_widget_status_update(m_stop_tracking_btn, false);
+            return;
         }
     }).detach();
 }
@@ -110,12 +124,11 @@ void DroneTrackingWindow::stop_tracking() {
     on_widget_status_update(m_stop_tracking_btn, false);
 
     std::thread([this]() {
-        if (m_signaling) {
-            m_signaling->end();
-            m_signaling.reset();
+        try {
+            m_webrtc_manager->disconnect();
+        } catch (const std::exception& ex) {
+            emit append_log(QString("Error stopping tracking: ") + QString::fromStdString(ex.what()));
         }
-
-        emit append_log("Tracking stopped");
 
         update_widget_status(m_start_tracking_btn, true);
         update_widget_status(m_stop_tracking_btn, false);

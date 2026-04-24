@@ -5,80 +5,99 @@
 #include <rtc/rtc.hpp>
 #include <QJsonDocument>
 
-WebRtcManager::WebRtcManager() : m_signalingClient(nullptr) {}
-
-WebRtcManager::~WebRtcManager() {
-    if (m_peerConnection) {
-        m_peerConnection->close();
-    }
-}
-
-void WebRtcManager::initialize(WebSocketSignaling* signalingClient) {
-    m_signalingClient = signalingClient;
-
+WebRtcManager::WebRtcManager(std::unique_ptr<WebSocketSignaling> signaling, QObject *parent) : m_signaling(std::move(signaling)), QObject(parent) {
     rtc::Configuration config;
     // Public Google STUN server for NAT traversal
     config.iceServers.emplace_back(rtc::IceServer{"stun:stun.l.google.com:19302"});
 
-    m_peerConnection = std::make_shared<rtc::PeerConnection>(config);
+    m_peer_connection = std::make_unique<rtc::PeerConnection>(config);
 
-    m_peerConnection->onStateChange([](rtc::PeerConnection::State state) {
+    m_peer_connection->onStateChange([this](rtc::PeerConnection::State state) {
         spdlog::info("WebRTC State: {}", int(state));
+
+        if (state == rtc::PeerConnection::State::Connected) {
+            spdlog::info("Peer connection established");
+            emit on_connection_state(true);
+        } else if (state == rtc::PeerConnection::State::Failed || state == rtc::PeerConnection::State::Closed) {
+            spdlog::warn("Peer connection failed or closed");
+            emit on_connection_state(false);
+        }
     });
 
-    m_peerConnection->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
+    m_peer_connection->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
         spdlog::info("ICE Gathering State: {}", int(state));
     });
 
     // Handle Local ICE Candidates
-    m_peerConnection->onLocalCandidate([this](rtc::Candidate candidate) {
+    m_peer_connection->onLocalCandidate([this](rtc::Candidate candidate) {
         spdlog::debug("New local ICE candidate generated.");
-        if (m_signalingClient) {
+        if (m_signaling) {
             // Normally you would serialize this to JSON and send it over WebSocket
             // Example:
             QJsonObject json;
             json["type"] = "candidate";
             json["candidate"] = QString::fromStdString(candidate.candidate());
             json["sdpMid"] = QString::fromStdString(candidate.mid());
-            // m_signalingClient->sendMessage(QJsonDocument(json).toJson(QJsonDocument::Compact));
         }
     });
 
     // Handle incoming local description (SDP Offer/Answer)
-    m_peerConnection->onLocalDescription([this](rtc::Description description) {
-        spdlog::debug("Local SDP Description generated.");
-        if (m_signalingClient) {
-            QJsonObject json;
-            json["type"] = QString::fromStdString(description.typeString());
-            json["sdp"] = QString::fromStdString(std::string(description));
-            // m_signalingClient->sendMessage(QJsonDocument(json).toJson(QJsonDocument::Compact));
+    m_peer_connection->onLocalDescription([this](rtc::Description description) {
+        auto sdp = std::string(description);
+        auto type = description.typeString();
+        spdlog::debug("Local SDP Description generated, type: {}, SDP: {}", type, sdp);
+        if (m_signaling) {
+            auto answer = m_signaling->exchange_offer(sdp);
+
+            if (answer.empty()) {
+                spdlog::error("Failed to exchange offer with remote server");
+                return;
+            }
+            spdlog::debug("Received remote SDP answer: {}", answer);
+            m_peer_connection->setRemoteDescription(rtc::Description(answer, "answer"));
         }
     });
 
     // Create a data channel
-    m_dataChannel = m_peerConnection->createDataChannel("drone_data");
-    m_dataChannel->onOpen([this]() {
+    m_data_channel = m_peer_connection->createDataChannel("drone_data");
+    m_data_channel->onOpen([this]() {
         spdlog::info("Data channel opened");
-        m_dataChannel->send("Hello from DroneTracking WebRTC!");
+        m_data_channel->send("Hello from DroneTracking WebRTC!");
     });
 
-    m_dataChannel->onMessage([this](std::variant<rtc::binary, rtc::string> message) {
+    m_data_channel->onMessage([this](std::variant<rtc::binary, rtc::string> message) {
         if (std::holds_alternative<rtc::string>(message)) {
             std::string msg = std::get<rtc::string>(message);
             spdlog::debug("Received msg on data channel: {}", msg);
-            if (m_onMessageCallback) {
-                m_onMessageCallback(msg);
+            if (m_on_message_callback) {
+                m_on_message_callback(msg);
             }
         }
     });
 }
 
+WebRtcManager::~WebRtcManager() {
+    if (m_peer_connection) {
+        m_peer_connection->close();
+    }
+}
+
+void WebRtcManager::connect() {
+    m_peer_connection->setLocalDescription();
+}
+
+void WebRtcManager::disconnect() {
+    if (m_peer_connection) {
+        m_peer_connection->close();
+    }
+}
+
 void WebRtcManager::setOnMessageCallback(std::function<void(const std::string&)> callback) {
-    m_onMessageCallback = std::move(callback);
+    m_on_message_callback = std::move(callback);
 }
 
 void WebRtcManager::sendMessage(const std::string& message) {
-    if (m_dataChannel && m_dataChannel->isOpen()) {
-        m_dataChannel->send(message);
+    if (m_data_channel && m_data_channel->isOpen()) {
+        m_data_channel->send(message);
     }
 }
