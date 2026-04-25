@@ -12,12 +12,12 @@ namespace rtc {
     class DataChannel;
 }
 
-class WebSocketSignaling;
+class Signaling;
 
 class WebRtcManager : public QObject {
     Q_OBJECT
 public:
-    WebRtcManager(std::unique_ptr<WebSocketSignaling> signaling, QObject *parent = nullptr);
+    WebRtcManager(std::unique_ptr<Signaling> signaling, QObject *parent = nullptr);
     ~WebRtcManager();
 
     void connect();
@@ -36,7 +36,7 @@ private:
 
     std::function<void(const std::string&)> m_on_message_callback;
 
-    std::unique_ptr<WebSocketSignaling> m_signaling;
+    std::unique_ptr<Signaling> m_signaling;
 
     signals: 
         void on_connection_state(bool connected);

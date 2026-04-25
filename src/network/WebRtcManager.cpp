@@ -5,7 +5,9 @@
 #include <rtc/rtc.hpp>
 #include <QJsonDocument>
 
-WebRtcManager::WebRtcManager(std::unique_ptr<WebSocketSignaling> signaling, QObject *parent) : m_signaling(std::move(signaling)), QObject(parent) {
+WebRtcManager::WebRtcManager(std::unique_ptr<Signaling> signaling, QObject *parent) : m_signaling(std::move(signaling)), QObject(parent) {}
+
+void WebRtcManager::connect() {
     rtc::Configuration config;
     // Public Google STUN server for NAT traversal
     config.iceServers.emplace_back(rtc::IceServer{"stun:stun.l.google.com:19302"});
@@ -13,7 +15,18 @@ WebRtcManager::WebRtcManager(std::unique_ptr<WebSocketSignaling> signaling, QObj
     m_peer_connection = std::make_unique<rtc::PeerConnection>(config);
 
     m_peer_connection->onStateChange([this](rtc::PeerConnection::State state) {
-        spdlog::info("WebRTC State: {}", int(state));
+        auto state_str = [state]() {
+            switch (state) {
+                case rtc::PeerConnection::State::New: return "New";
+                case rtc::PeerConnection::State::Connecting: return "Connecting";
+                case rtc::PeerConnection::State::Connected: return "Connected";
+                case rtc::PeerConnection::State::Disconnected: return "Disconnected";
+                case rtc::PeerConnection::State::Failed: return "Failed";
+                case rtc::PeerConnection::State::Closed: return "Closed";
+                default: return "Unknown";
+            }
+        }();
+        spdlog::info("WebRTC State {}: {}", static_cast<int>(state), state_str);
 
         if (state == rtc::PeerConnection::State::Connected) {
             spdlog::info("Peer connection established");
@@ -25,7 +38,15 @@ WebRtcManager::WebRtcManager(std::unique_ptr<WebSocketSignaling> signaling, QObj
     });
 
     m_peer_connection->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
-        spdlog::info("ICE Gathering State: {}", int(state));
+        auto state_str = [state]() {
+            switch (state) {
+                case rtc::PeerConnection::GatheringState::New: return "New";
+                case rtc::PeerConnection::GatheringState::InProgress: return "InProgress";
+                case rtc::PeerConnection::GatheringState::Complete: return "Complete";
+                default: return "Unknown";
+            }
+        }();
+        spdlog::info("ICE Gathering State: {}: {}", int(state), state_str);
     });
 
     // Handle Local ICE Candidates
@@ -77,18 +98,20 @@ WebRtcManager::WebRtcManager(std::unique_ptr<WebSocketSignaling> signaling, QObj
 }
 
 WebRtcManager::~WebRtcManager() {
-    if (m_peer_connection) {
-        m_peer_connection->close();
-    }
-}
-
-void WebRtcManager::connect() {
-    m_peer_connection->setLocalDescription();
+    disconnect();
 }
 
 void WebRtcManager::disconnect() {
+    if (m_data_channel) {
+        m_data_channel->close();
+        m_data_channel.reset();
+    }
     if (m_peer_connection) {
         m_peer_connection->close();
+        m_peer_connection.reset();
+    }
+    if (m_signaling) {
+        m_signaling->end();
     }
 }
 
@@ -98,6 +121,9 @@ void WebRtcManager::setOnMessageCallback(std::function<void(const std::string&)>
 
 void WebRtcManager::sendMessage(const std::string& message) {
     if (m_data_channel && m_data_channel->isOpen()) {
+        spdlog::debug("Sending message on data channel: {}", message);
         m_data_channel->send(message);
+    } else {
+        spdlog::error("Cannot send message, data channel is invalid or not open: {}", message);
     }
 }

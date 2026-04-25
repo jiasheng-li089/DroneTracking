@@ -8,10 +8,13 @@
 
 #include "../logger.h"
 
+#define PUBLISHER_ID 123456788
+
 #define SUCCESS "success"
 
 #define FIELD_ID "id"
 #define FIELD_JANUS "janus"
+#define FIELD_TOKEN "token"
 #define FIELD_SESSION_ID "session_id"
 #define FIELD_HANDLE_ID "handle_id"
 #define FIELD_PLUGIN "plugin"
@@ -28,6 +31,7 @@ struct JanusReq {
     /* data */
     std::string janus;
     std::string transaction = "txn_" + std::to_string(std::rand());
+    std::string token = "2237ebfe7d4cc5ef4666c4ecdb8ac0a4";
 
     long session_id = 0;
     long handle_id = 0;
@@ -37,6 +41,7 @@ struct JanusReq {
         QJsonObject obj;
         obj[FIELD_JANUS] = QString::fromStdString(janus);
         obj[FIELD_TRANSACTION] = QString::fromStdString(transaction);
+        obj[FIELD_TOKEN] = QString::fromStdString(token);
         if (session_id != 0) {
             obj[FIELD_SESSION_ID] = static_cast<qint64>(session_id);
         }
@@ -104,6 +109,7 @@ struct JoinAndConfigureBody {
         QJsonObject obj;
         obj["request"] = QString::fromStdString(request);
         obj["room"] = static_cast<qint64>(room);
+        obj[FIELD_ID] = static_cast<qint64>(PUBLISHER_ID);
         obj["pin"] = QString::fromStdString(VIDEO_ROOM_PIN);
         obj["ptype"] = QString::fromStdString(ptype);
         obj["display"] = QString::fromStdString(display);
@@ -530,7 +536,7 @@ void WebSocketSignaling::on_text_message_received(const QString& message) {
 
     auto transaction = json_msg["transaction"].toString().toStdString();
     if (transaction.empty()) {
-        spdlog::error("Received message without transaction ID");
+        spdlog::warn("Received message without transaction ID");
     } else {
         // handle the transaction
         spdlog::info("Received message with transaction ID: {}", transaction);

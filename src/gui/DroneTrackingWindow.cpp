@@ -10,7 +10,7 @@
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {
 
-    m_webrtc_manager = std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol"));
+    m_webrtc_manager = std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://192.168.88.9:8188", "janus-protocol"));
 
     setup_ui();
 
@@ -42,7 +42,17 @@ void DroneTrackingWindow::setup_ui() {
         button_layout->addWidget(btn);
         connect(reinterpret_cast<QPushButton*>(btn), &QPushButton::clicked, this,
                 [this, btn]() { on_button_clicked(btn); });
+
+        btn->setEnabled(button_id % 2 == 1);
     }
+
+    #ifdef DEBUG_CHANNEL
+    auto debug_channel_btn = new QPushButton("Send Debug Message", root_widget);
+    button_layout->addWidget(debug_channel_btn);
+    connect(debug_channel_btn, &QPushButton::clicked, this, [this]() {
+        m_webrtc_manager->sendMessage("Hello from debug channel!");
+    });
+    #endif
 
     layout->addLayout(button_layout);
 

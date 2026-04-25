@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(DEBUG_CHANNEL "Enable debug webrtc data channel" OFF)
+
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
     set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
@@ -97,6 +99,9 @@ link_directories(
 
 # Targets linking
 foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
+    if(DEBUG_CHANNEL)
+        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE DEBUG_CHANNEL)
+    endif()
     target_link_libraries("${PROJECT_NAME}_${key}" PRIVATE
             Qt6::Core
             Qt6::Gui
