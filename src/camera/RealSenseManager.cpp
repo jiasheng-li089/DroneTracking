@@ -90,7 +90,10 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                     frame_data.emplace_back(cameraId + 200, serial, grayImg.copy(), nullptr);
                 }
 
-                
+                if (m_frame_callback) {
+                    m_frame_callback(cameraId, serial, frames);
+                }
+
                 if (frame_data.size() > 0) {
                     emit frames_received(std::move(frame_data));
                 }
@@ -102,4 +105,8 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
     } catch (const rs2::error& e) {
         emit error_occurred(QString("Camera %1 error: %2").arg(cameraId).arg(e.what()));
     }
+}
+
+void RealSenseManager::set_frame_callback(std::function<void(const int, const std::string &, rs2::frameset)> callback) {
+    m_frame_callback = std::move(callback);
 }

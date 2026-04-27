@@ -15,6 +15,10 @@ class Signaling;
 
 class CameraWidget;
 
+namespace tracking {
+    class VisionTracker;
+}
+
 class DroneTrackingWindow : public QMainWindow {
     Q_OBJECT
 
@@ -31,6 +35,7 @@ class DroneTrackingWindow : public QMainWindow {
 
         std::unique_ptr<RealSenseManager> m_rs_manager;
         std::unique_ptr<WebRtcManager> m_webrtc_manager;
+        std::unique_ptr<tracking::VisionTracker> m_vision_tracker;
 
         QWidget * m_start_camera_btn{};
         QWidget * m_stop_camera_btn{};

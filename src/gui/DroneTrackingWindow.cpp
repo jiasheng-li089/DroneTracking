@@ -6,11 +6,13 @@
 #include "../camera/RealSenseManager.h"
 #include "../network/WebRtcManager.h"
 #include "../network/WebSocketSignaling.h"
+#include "../tracking/VisionTracker.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {
 
-    m_webrtc_manager = std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://192.168.88.9:8188", "janus-protocol"));
+    m_webrtc_manager = std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol"));
+    m_vision_tracker = std::make_unique<tracking::VisionTracker>();
 
     setup_ui();
 
@@ -99,10 +101,13 @@ void DroneTrackingWindow::on_webrtc_connection_state(bool connected) {
         m_log_te->append("WebRTC connection established");
         on_widget_status_update(m_start_tracking_btn, false);
         on_widget_status_update(m_stop_tracking_btn, true);
+
+        m_rs_manager->set_frame_callback(std::bind(&tracking::VisionTracker::process_frames, m_vision_tracker.get(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     } else {
         m_log_te->append("WebRTC connection lost");
         on_widget_status_update(m_start_tracking_btn, true);
         on_widget_status_update(m_stop_tracking_btn, false);
+        m_rs_manager->set_frame_callback(nullptr);
     }
 
 
