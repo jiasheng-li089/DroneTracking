@@ -11,14 +11,7 @@ A cross-platform (Windows & Linux) C++ Desktop Application utilizing Qt6, WebSoc
 
 ## Technologies Used
 - **Qt6** (Core, Gui, Widgets, WebSockets) - UI rendering, signaling WebSocket client.
-- **libdatachannel** - A lightweight C/C++ WebRTC network library, chosen over the main Google WebRTC implementation for simplicity and cross-platform compatibility without heavy build-system modifications.
-- **CMake** (v3.16+)
-
-## Project Good Practices
-- Split UI components and network logic into dedicated folders and classes (`gui` vs `network`).
-- Smart pointer management (`std::unique_ptr`, `std::shared_ptr`).
-- Cross-platform dependency resolution via CMake (`FetchContent`).
-- Signal-slot mechanism for asynchronous operations and uncoupling UI from network responses.
+- **libdatachannel** - A lightweight C/C++ WebRTC network library, chosen over the main Google WebRTC implementation for simplicity and cross-platform compatibility without heavy build-system modifications.- **CMake** (v3.16+)
 
 ## Setup & Building
 
@@ -36,6 +29,3 @@ cmake ..
 cmake --build .
 ```
 *(On Windows, you may need to open the project via CMake-GUI or QtCreator, or run using Developer Command Prompt with Ninja or Visual Studio generators.)*
-
-### Notes on WebRTC Signaling
-The WebSocket client is currently pointing to a `ws://localhost:8080/ws` server. If you receive a valid SDP offer and ICE Candidates from a signaling server in the signaling phase, you can plug them into the `QWebSocket::textMessageReceived` callback inside `MainWindow.cpp` and pass them to `WebRtcManager` to set the remote description. 
