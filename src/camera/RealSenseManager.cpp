@@ -64,7 +64,11 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
         cfg.enable_stream(RS2_STREAM_INFRARED, 640, 480, RS2_FORMAT_Y8, 30);
 
         p.start(cfg);
-    
+
+        auto sensor = p.get_active_profile().get_device().query_sensors()[0];
+        sensor.set_option(RS2_OPTION_MIN_DISTANCE, 0.25);  // set minimum distance to 25cm to avoid noise
+        sensor.set_option(RS2_OPTION_MAX_DISTANCE, 6.5);  // set maximum distance to 6.5 meters
+
         while (m_running) {
             rs2::frameset frames;
             if (p.try_wait_for_frames(&frames,
