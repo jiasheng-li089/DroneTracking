@@ -3,10 +3,13 @@
 #include <QBoxLayout>
 #include <QPushButton>
 
+#include <spdlog/spdlog.h>
+
 #include "../camera/RealSenseManager.h"
 #include "../network/WebRtcManager.h"
 #include "../network/WebSocketSignaling.h"
 #include "../tracking/VisionTracker.h"
+#include "CameraWidget.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {
@@ -19,6 +22,8 @@ DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* paren
     connect(this, &DroneTrackingWindow::update_widget_status, this, &DroneTrackingWindow::on_widget_status_update);
     connect(this, &DroneTrackingWindow::append_log, m_log_te, &QTextEdit::append);
     connect(m_webrtc_manager.get(), &WebRtcManager::on_connection_state, this, &DroneTrackingWindow::on_webrtc_connection_state);
+    connect(m_rs_manager.get(), &RealSenseManager::frames_received, this, &DroneTrackingWindow::frames_received);
+    connect(m_rs_manager.get(), &RealSenseManager::error_occurred, this, &DroneTrackingWindow::error_occurred);
 }
 
 DroneTrackingWindow::~DroneTrackingWindow() = default;
@@ -78,10 +83,14 @@ void DroneTrackingWindow::on_button_clicked(QWidget* sender) {
         case 0:
             m_log_te->append("Start Camera button clicked");
             m_rs_manager->start_cameras();
+            on_widget_status_update(m_start_camera_btn, false);
+            on_widget_status_update(m_stop_camera_btn, true);
             break;
         case 1:
             m_log_te->append("Stop Camera button clicked");
             m_rs_manager->stop_cameras();
+            on_widget_status_update(m_start_camera_btn, true);
+            on_widget_status_update(m_stop_camera_btn, false);
             break;
         case 2:
             m_log_te->append("Start Tracking button clicked");
@@ -125,8 +134,8 @@ void DroneTrackingWindow::start_tracking() {
             m_webrtc_manager->connect();
         } catch (const std::exception& ex) {
             emit append_log(QString("Error starting tracking: ") + QString::fromStdString(ex.what()));
-            on_widget_status_update(m_start_tracking_btn, true);
-            on_widget_status_update(m_stop_tracking_btn, false);
+            emit update_widget_status(m_start_tracking_btn, true);
+            emit update_widget_status(m_stop_tracking_btn, false);
             return;
         }
     }).detach();
@@ -145,18 +154,50 @@ void DroneTrackingWindow::stop_tracking() {
             emit append_log(QString("Error stopping tracking: ") + QString::fromStdString(ex.what()));
         }
 
-        update_widget_status(m_start_tracking_btn, true);
-        update_widget_status(m_stop_tracking_btn, false);
+        emit update_widget_status(m_start_tracking_btn, true);
+        emit update_widget_status(m_stop_tracking_btn, false);
     }).detach();
 }
 
 void DroneTrackingWindow::frames_received(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames) {
-    for (const auto& frame_data : frames) {
-        int camera_id = std::get<0>(frame_data);
-        std::string serial = std::get<1>(frame_data);
-        QImage img = std::get<2>(frame_data);
-        rs2::depth_frame depth_frame = std::get<3>(frame_data);
-    }
+    spdlog::debug("Received frames for processing");
+    if (m_start_camera_btn->isEnabled() || frames.size() == 0) return;
+
+    std::for_each(frames.begin(), frames.end(), [this](const auto& frameInfo) {
+        int cameraId = std::get<0>(frameInfo);
+        auto serial_str = std::get<1>(frameInfo);
+        const QString& serial = QString::fromStdString(serial_str);
+
+        if (m_camera_serials.find(serial_str) == m_camera_serials.end()) {
+            m_camera_serials.insert(serial_str);
+        }
+
+        const QImage& img = std::get<2>(frameInfo);
+        const auto& depth_frame_ptr = std::get<3>(frameInfo);
+
+        if (cameraId < 100 || cameraId >= 200) {
+            if (!m_camera_widgets.contains(cameraId)) {
+                append_log(QString("Received %1 frame from camera %2 (Serial: %3)")
+                               .arg(cameraId < 100 ? "color" : "infrared")
+                               .arg(cameraId)
+                               .arg(serial));
+
+                CameraWidget* widget = new CameraWidget(this);
+                widget->setMinimumSize(320, 240);
+
+                int count = m_camera_widgets.size();
+                int row = count / 2;
+                int col = count % 2;
+                m_camera_container->addWidget(widget, row, col);
+
+                m_camera_widgets.insert(std::get<0>(frameInfo), widget);
+            } else {
+                m_camera_widgets[cameraId]->update_frame(img);
+            }
+        } else if (depth_frame_ptr) {
+            // Handle depth frame
+        }
+    });
 }
 
 void DroneTrackingWindow::error_occurred(const QString& err) { m_log_te->append(err); }

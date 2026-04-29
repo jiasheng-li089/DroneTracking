@@ -50,6 +50,8 @@ class DroneTrackingWindow : public QMainWindow {
 
         std::string m_config_file;
 
+        std::set<std::string> m_camera_serials;
+
     signals:
         void update_widget_status(QWidget* sender, bool enable);
         void append_log(const QString& message);

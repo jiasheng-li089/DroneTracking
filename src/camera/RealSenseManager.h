@@ -8,6 +8,8 @@
 
 #include <librealsense2/rs.hpp>
 
+#include <spdlog/spdlog.h>
+
 class RealSenseManager : public QObject {
     Q_OBJECT
 public:
@@ -28,6 +30,5 @@ private:
 
     std::vector<std::thread> m_threads;
     std::atomic<bool> m_running;
-    std::atomic<uint64_t> m_captureEpoch{0};
     std::function<void(const int, const std::string &, rs2::frameset)> m_frame_callback;
 };
