@@ -53,10 +53,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
-# include(CMake/external_json.cmake)
-# add_subdirectory(third_party/tclap)
-# add_subdirectory(third_party/rsutils)
-
 file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.cpp"
     "src/*.c"
