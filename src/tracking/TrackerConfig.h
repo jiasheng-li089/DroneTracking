@@ -28,6 +28,8 @@ class TrackerConfig {
 
     cv::aruco::Dictionary get_aruco_dictionary() const;
 
+    std::map<std::string, std::pair<cv::Mat, cv::Mat>> get_camera_calibration_parameters() const;
+
    private:
     YAML::Node m_config;
 };

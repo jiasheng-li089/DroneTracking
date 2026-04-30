@@ -34,9 +34,9 @@ detector:
     maxPerspectiveRemovePixelPerCell: 4
 
 cameras:
-  0:
+  f1231477:
     min_distance: 0.25
     max_distance: 6.5
-  1:
+  f1271805:
     min_distance: 0.25
     max_distance: 6.5
