@@ -148,10 +148,12 @@ void PhotoCaptureWindow::on_frame_received(std::vector<std::tuple<int, std::stri
 
         if (cameraId < 100 || cameraId >= 200) {
             if (!m_camera_widgets.contains(cameraId)) {
-                append_log(QString("Received %1 frame from camera %2 (Serial: %3)")
+                append_log(QString("Received %1 frame from camera %2 (Serial: %3), video size: %4x%5")
                                .arg(cameraId < 100 ? "color" : "infrared")
                                .arg(cameraId)
-                               .arg(serial));
+                               .arg(serial)
+                               .arg(img.width())
+                               .arg(img.height()));
 
                 CameraWidget* widget = new CameraWidget(this);
                 widget->setMinimumSize(320, 240);

@@ -32,6 +32,8 @@ class TrackerConfig {
 
    private:
     YAML::Node m_config;
+
+    
 };
 
 };  // namespace tracking
