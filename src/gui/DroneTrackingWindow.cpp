@@ -9,13 +9,14 @@
 #include "../network/WebRtcManager.h"
 #include "../network/WebSocketSignaling.h"
 #include "../tracking/VisionTracker.h"
+#include "../tracking/TrackerConfig.h"
 #include "CameraWidget.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {
 
     m_webrtc_manager = std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol"));
-    m_vision_tracker = std::make_unique<tracking::VisionTracker>();
+    m_vision_tracker = std::make_unique<tracking::VisionTracker>(std::make_shared<tracking::TrackerConfig>(m_config_file));
 
     setup_ui();
 

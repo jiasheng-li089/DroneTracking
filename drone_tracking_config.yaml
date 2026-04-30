@@ -1,0 +1,42 @@
+marker:
+  1:
+    angle: 0.0
+    size: 0.1
+  2:
+    angle: 120.0
+    size: 0.1
+  3:
+    angle: 240.0
+    size: 0.1
+  
+detector:
+  dictionary: "DICT_ARUCO_ORIGINAL"
+  parameters:
+    adaptiveThreshWinSizeMin: 3
+    adaptiveThreshWinSizeMax: 23
+    adaptiveThreshWinSizeStep: 10
+    adaptiveThreshConstant: 7
+    minMarkerPerimeterRate: 0.03
+    maxMarkerPerimeterRate: 4.0
+    polygonalApproxAccuracyRate: 0.03
+    minCornerDistanceRate: 0.05
+    minDistanceToBorder: 3
+    minMarkerDistanceRate: 0.05
+    cornerRefinementMethod: "CORNER_REFINE_SUBPIX"
+    cornerRefinementWinSize: 5
+    cornerRefinementMaxIterations: 30
+    cornerRefinementMinAccuracy: 0.1
+    errorCorrectionRate: 0.6
+    maxErroneousBitsInBorderRate: 0.35
+    minOtsuStdDev: 5.0
+    perspectiveRemovePixelPerCell: 4
+    perspectiveRemoveIgnoredMarginPerCell: 0.0
+    maxPerspectiveRemovePixelPerCell: 4
+
+cameras:
+  0:
+    min_distance: 0.25
+    max_distance: 6.5
+  1:
+    min_distance: 0.25
+    max_distance: 6.5

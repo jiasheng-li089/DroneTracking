@@ -29,7 +29,7 @@ set(CMAKE_AUTOUIC ON)
 
 # Find Qt6 components
 find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets OpenGLWidgets REQUIRED)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect)
 
 # LibDataChannel for WebRTC
 # We use FetchContent to integrate a lightweight C/C++ WebRTC library,
@@ -52,6 +52,16 @@ FetchContent_Declare(
     GIT_TAG        v1.15.1
 )
 FetchContent_MakeAvailable(spdlog)
+
+FetchContent_Declare(
+    yaml-cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG        master
+)
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
+FetchContent_MakeAvailable(yaml-cpp)
 
 file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.cpp"
@@ -106,6 +116,7 @@ foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
             Qt6::OpenGLWidgets
             datachannel
             spdlog::spdlog
+            yaml-cpp::yaml-cpp
         ${REALSENSE_LIBRARIES}
         ${OpenCV_LIBS}
     )

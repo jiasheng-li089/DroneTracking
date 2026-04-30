@@ -5,13 +5,18 @@
 
 #include "gui/DroneTrackingWindow.h"
 #include "logger.h"
+#include <spdlog/spdlog.h>
 
 int main(int argc, char *argv[]) {
     Logger::init("logs/drone_tracking.log");
 
     QApplication a(argc, argv);
 
-    DroneTrackingWindow window (QDir::currentPath().toStdString() + "/captured_photos/20260415_125626.yaml");
+    QDir configDir = QDir::current();
+    configDir.cdUp();
+    auto config_file_path = configDir.absoluteFilePath("drone_tracking_config.yaml");
+    spdlog::info("Config file path: {}", config_file_path.toStdString());
+    DroneTrackingWindow window (config_file_path.toStdString());
 
     window.show();
 
