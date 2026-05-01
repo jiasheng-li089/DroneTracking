@@ -1,7 +1,6 @@
 #pragma once
 
-#include <yaml-cpp/yaml.h>
-
+#include <map>
 #include <string>
 
 #include <opencv2/core.hpp>
@@ -20,20 +19,18 @@ class TrackerConfig {
 
     ~TrackerConfig() = default;
 
-    // Add configuration parameters as needed, e.g., camera parameters, tracking settings, etc.
-
     std::map<int, MarkerParameter> get_marker_parameters() const;
 
     cv::aruco::DetectorParameters get_aruco_detector_parameters() const;
 
     cv::aruco::Dictionary get_aruco_dictionary() const;
 
-    std::map<std::string, std::pair<cv::Mat, cv::Mat>> get_camera_calibration_parameters() const;
+    const std::map<std::string, std::map<std::string, cv::Mat>>& get_camera_calibration_parameters() const;
 
    private:
-    YAML::Node m_config;
+    cv::FileStorage m_fs;
 
-    
+    mutable std::map<std::string, std::map<std::string, cv::Mat>> m_cameras_parameters;
 };
 
 };  // namespace tracking

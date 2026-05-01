@@ -171,7 +171,8 @@ void PhotoCaptureWindow::on_frame_received(std::vector<std::tuple<int, std::stri
             // Handle depth frame
         }
 
-        if (m_capturer && cameraId >= 200 && cameraId < 300) {
+        if (m_capturer && cameraId < 100) {
+            // capture the color frame for camera calibration
             m_capturer->on_frame(serial_str, img);
         }
     });

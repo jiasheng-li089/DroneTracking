@@ -110,8 +110,16 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                     spdlog::debug("Frameset received from cameraId: {}, serial: {}, frame #{}", cameraId, serial, frames.get_frame_number());
                 }
 
-                // rs2::frameset processed_frames = align_to_color.process(frames);
                 rs2::frameset processed_frames = frames;
+                if (frames.get_color_frame() && frames.get_depth_frame()) {
+                    try {
+                        processed_frames = align_to_color.process(frames);
+                    } catch (const rs2::error& e) {
+                        spdlog::warn("Alignment failed: {}", e.what());
+                    } catch (const std::exception& e) {
+                        spdlog::warn("Alignment threw exception: {}", e.what());
+                    }
+                }
 
                 std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frame_data;
 
@@ -133,7 +141,8 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                                     depth.get_stride_in_bytes(), QImage::Format_Grayscale16);
                     frame_data.emplace_back(cameraId + 100, serial, depthImg.copy(), depth);
                     if (log_frame) {
-                        spdlog::debug("Depth frame processed for cameraId: {}, serial: {}, timestamp: {}", cameraId, serial, depth.get_timestamp());
+                        auto origin_depth = frames.get_depth_frame();
+                        spdlog::debug("Depth frame processed for cameraId: {}, serial: {}, timestamp: {}, resolution: {}x{}, original resolution: {}x{}", cameraId, serial, depth.get_timestamp(), depth.get_width(), depth.get_height(), origin_depth.get_width(), origin_depth.get_height());
                     }
                 }
 
@@ -153,7 +162,9 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                 }
 
                 if (frame_data.size() > 0) {
-                    spdlog::debug("Emitting frames_received signal for cameraId: {}, serial: {}, frame count: {}", cameraId, serial, frame_data.size());
+                    if (log_frame) {
+                        spdlog::debug("Emitting frames_received signal for cameraId: {}, serial: {}, frame count: {}", cameraId, serial, frame_data.size());
+                    }
                     emit frames_received(std::move(frame_data));
                 }
             }

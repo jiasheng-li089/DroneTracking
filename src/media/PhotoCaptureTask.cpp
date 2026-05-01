@@ -52,6 +52,7 @@ void PhotoCaptureTask::on_frame(const std::string& serial, const QImage& ir_imag
             spdlog::error("Failed to save photo for serial: {}", serial);
         }
 
+        spdlog::debug("delete the camera serial {} from captured_serials set", serial);
         m_captured_serials.erase(serial);
     }
 

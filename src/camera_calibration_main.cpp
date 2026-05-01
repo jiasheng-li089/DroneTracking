@@ -13,21 +13,19 @@
 //       [--pattern-rows <N>]          \   # inner corners along height (default 6)
 //       [--square-size   <mm>]            # physical square side (default 25)
 
-#include <iostream>
-#include <map>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#include <opencv2/calib3d.hpp>
-#include <opencv2/core.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/imgproc.hpp>
-
 #include <QCoreApplication>
 #include <QFile>
 #include <QString>
 #include <QXmlStreamReader>
+#include <iostream>
+#include <map>
+#include <opencv2/calib3d.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // XML parsing
@@ -75,14 +73,13 @@ static std::map<std::string, std::vector<std::string>> ParseConfig(const std::st
 struct Args {
     std::string config_path;
     std::string output_path;
-    int pattern_cols  = 9;    // inner corners along X
-    int pattern_rows  = 6;    // inner corners along Y
-    double square_size = 25.0; // mm
+    int pattern_cols = 9;       // inner corners along X
+    int pattern_rows = 6;       // inner corners along Y
+    double square_size = 25.0;  // mm
 };
 
 static void PrintUsage(const char* prog) {
-    std::cerr << "Usage: " << prog
-              << " --config <xml> --output <yaml>"
+    std::cerr << "Usage: " << prog << " --config <xml> --output <yaml>"
               << " [--pattern-cols N] [--pattern-rows N]"
               << " [--square-size mm]\n";
 }
@@ -95,12 +92,19 @@ static Args ParseArgs(int argc, char* argv[]) {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for " + arg);
             return argv[++i];
         };
-        if      (arg == "--config")        a.config_path  = next();
-        else if (arg == "--output")        a.output_path  = next();
-        else if (arg == "--pattern-cols")  a.pattern_cols = std::stoi(next());
-        else if (arg == "--pattern-rows")  a.pattern_rows = std::stoi(next());
-        else if (arg == "--square-size")   a.square_size  = std::stod(next());
-        else { std::cerr << "Unknown argument: " << arg << "\n"; }
+        if (arg == "--config")
+            a.config_path = next();
+        else if (arg == "--output")
+            a.output_path = next();
+        else if (arg == "--pattern-cols")
+            a.pattern_cols = std::stoi(next());
+        else if (arg == "--pattern-rows")
+            a.pattern_rows = std::stoi(next());
+        else if (arg == "--square-size")
+            a.square_size = std::stod(next());
+        else {
+            std::cerr << "Unknown argument: " << arg << "\n";
+        }
     }
     return a;
 }
@@ -111,13 +115,11 @@ static Args ParseArgs(int argc, char* argv[]) {
 
 static bool FindCorners(const cv::Mat& img, cv::Size pattern, std::vector<cv::Point2f>& corners) {
     bool found = cv::findChessboardCorners(
-        img, pattern, corners,
-        cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_FAST_CHECK);
+        img, pattern, corners, cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_FAST_CHECK);
 
     if (found) {
-        cv::cornerSubPix(
-            img, corners, {11, 11}, {-1, -1},
-            cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.001));
+        cv::cornerSubPix(img, corners, {11, 11}, {-1, -1},
+                         cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.001));
     }
     return found;
 }
@@ -180,10 +182,8 @@ int main(int argc, char* argv[]) {
     obj_template.reserve(args.pattern_cols * args.pattern_rows);
     for (int r = 0; r < args.pattern_rows; ++r) {
         for (int c = 0; c < args.pattern_cols; ++c) {
-            obj_template.emplace_back(
-                static_cast<float>(c * args.square_size),
-                static_cast<float>(r * args.square_size),
-                0.0f);
+            obj_template.emplace_back(static_cast<float>(c * args.square_size),
+                                      static_cast<float>(r * args.square_size), 0.0f);
         }
     }
 
@@ -242,15 +242,11 @@ int main(int argc, char* argv[]) {
     cv::Mat K2 = cv::Mat::eye(3, 3, CV_64F);
     cv::Mat D1, D2;
 
-    double rms1 = cv::calibrateCamera(
-        object_points, image_points1, image_size,
-        K1, D1, cv::noArray(), cv::noArray(),
-        cv::CALIB_FIX_ASPECT_RATIO);
+    double rms1 = cv::calibrateCamera(object_points, image_points1, image_size, K1, D1, cv::noArray(), cv::noArray(),
+                                      cv::CALIB_FIX_ASPECT_RATIO);
 
-    double rms2 = cv::calibrateCamera(
-        object_points, image_points2, image_size,
-        K2, D2, cv::noArray(), cv::noArray(),
-        cv::CALIB_FIX_ASPECT_RATIO);
+    double rms2 = cv::calibrateCamera(object_points, image_points2, image_size, K2, D2, cv::noArray(), cv::noArray(),
+                                      cv::CALIB_FIX_ASPECT_RATIO);
 
     std::cout << "\nIndividual calibration RMS  cam1=" << rms1 << "  cam2=" << rms2 << "\n";
 
@@ -259,14 +255,10 @@ int main(int argc, char* argv[]) {
     // ------------------------------------------------------------------
     cv::Mat R, T, E, F;
 
-    double stereo_rms = cv::stereoCalibrate(
-        object_points,
-        image_points1, image_points2,
-        K1, D1, K2, D2,
-        image_size,
-        R, T, E, F,
-        cv::CALIB_USE_INTRINSIC_GUESS | cv::CALIB_ZERO_TANGENT_DIST,
-        cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, 1e-5));
+    double stereo_rms =
+        cv::stereoCalibrate(object_points, image_points1, image_points2, K1, D1, K2, D2, image_size, R, T, E, F,
+                            cv::CALIB_USE_INTRINSIC_GUESS | cv::CALIB_ZERO_TANGENT_DIST,
+                            cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, 1e-5));
 
     std::cout << "Stereo calibration RMS reprojection error: " << stereo_rms << "\n";
 
@@ -288,27 +280,36 @@ int main(int argc, char* argv[]) {
 
     fs << "camera1_serial" << serial1;
     fs << "camera2_serial" << serial2;
-    fs << "image_width"    << image_size.width;
-    fs << "image_height"   << image_size.height;
-    fs << "pattern_cols"   << args.pattern_cols;
-    fs << "pattern_rows"   << args.pattern_rows;
+    fs << "image_width" << image_size.width;
+    fs << "image_height" << image_size.height;
+    fs << "pattern_cols" << args.pattern_cols;
+    fs << "pattern_rows" << args.pattern_rows;
     fs << "square_size_mm" << args.square_size;
-    fs << "valid_pairs"    << valid_pairs;
-    fs << "rms1"           << rms1;
-    fs << "rms2"           << rms2;
-    fs << "stereo_rms"     << stereo_rms;
+    fs << "valid_pairs" << valid_pairs;
+    fs << "rms1" << rms1;
+    fs << "rms2" << rms2;
+    fs << "stereo_rms" << stereo_rms;
 
-    // Intrinsics
-    fs << "K1" << K1;   // 3x3 camera matrix, camera 1
-    fs << "D1" << D1;   // distortion coefficients, camera 1
-    fs << "K2" << K2;   // 3x3 camera matrix, camera 2
-    fs << "D2" << D2;   // distortion coefficients, camera 2
+    fs << "cameras" << "{";
 
-    // Stereo extrinsics  (all expressed in camera-1 frame)
-    fs << "R" << R;     // rotation:    cam2 relative to cam1
-    fs << "T" << T;     // translation: cam2 relative to cam1 (mm)
-    fs << "E" << E;     // essential matrix
-    fs << "F" << F;     // fundamental matrix
+    fs << serial1 << "{";
+    fs << "K" << K1;
+    fs << "D" << D1;
+    fs << "T" << T;
+    fs << "R" << R;
+    fs << "}";
+
+    fs << serial2 << "{";
+    fs << "K" << K2;
+    fs << "D" << D2;
+    fs << "T" << -R.t() * T;  // cam1 relative to cam2 is inverse of cam2 relative to cam1
+    fs << "R" << R.t();       // cam1 relative to cam2 is inverse of cam2 relative to cam1
+    fs << "}";
+
+    fs << "}";
+
+    fs << "E" << E;  // essential matrix
+    fs << "F" << F;  // fundamental matrix
 
     fs.release();
 
