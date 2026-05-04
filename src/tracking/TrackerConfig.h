@@ -11,6 +11,29 @@ namespace tracking {
 struct MarkerParameter {
     double angle;
     float size;
+
+    cv::Mat obj_points;
+
+    static MarkerParameter create(double angle, float size) {
+        auto result = MarkerParameter{angle, size, cv::Mat(4, 1, CV_32FC3)};  // Assuming 4 corners with 3D coordinates (x, y, z)
+        float half_size = size / 2.0f;
+
+        result.obj_points.at<cv::Vec3f>(0, 0) = cv::Vec3f(-half_size, half_size, 0);   // Top-left
+        result.obj_points.at<cv::Vec3f>(1, 0) = cv::Vec3f(half_size, half_size, 0);    // Top-right
+        result.obj_points.at<cv::Vec3f>(2, 0) = cv::Vec3f(half_size, -half_size, 0);   // Bottom-right
+        result.obj_points.at<cv::Vec3f>(3, 0) = cv::Vec3f(-half_size, -half_size, 0);  // Bottom-left
+
+        return result;
+    }
+};
+
+struct CameraParameters {
+    cv::Mat K;  // Intrinsic matrix
+    cv::Mat D;  // Distortion coefficients
+    cv::Mat T;  // Translation vector (extrinsic)
+    cv::Mat R;  // Rotation matrix (extrinsic)
+
+    std::string serial;  // Camera serial number for identification
 };
 
 class TrackerConfig {
@@ -25,12 +48,11 @@ class TrackerConfig {
 
     cv::aruco::Dictionary get_aruco_dictionary() const;
 
-    const std::map<std::string, std::map<std::string, cv::Mat>>& get_camera_calibration_parameters() const;
+    std::vector<CameraParameters> get_camera_calibration_parameters() const;
 
    private:
     cv::FileStorage m_fs;
 
-    mutable std::map<std::string, std::map<std::string, cv::Mat>> m_cameras_parameters;
 };
 
 };  // namespace tracking

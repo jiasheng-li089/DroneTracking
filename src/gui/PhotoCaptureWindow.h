@@ -32,7 +32,7 @@ private slots:
     void on_finalize_complete(bool success, const QString& message);
     void on_update_capture_status(bool capturing);
 
-    void on_frame_received(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
+    void on_frame_received(std::vector<std::tuple<int, std::string, QImage>> frames);
     void on_camera_error(const QString& err);
 
 private:

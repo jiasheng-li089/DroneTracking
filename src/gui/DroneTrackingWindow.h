@@ -60,7 +60,7 @@ class DroneTrackingWindow : public QMainWindow {
 
         void on_button_clicked(QWidget* sender);
 
-        void frames_received(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
+        void frames_received(std::vector<std::tuple<int, std::string, QImage>> frames);
         
         void error_occurred(const QString& err);
 

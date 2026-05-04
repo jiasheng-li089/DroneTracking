@@ -6,35 +6,34 @@ namespace tracking {
 
 TrackerConfig::TrackerConfig(const std::string& config_file_path) {
     m_fs.open(config_file_path, cv::FileStorage::READ);
-    if (!m_fs.isOpened())
-        throw std::runtime_error("Failed to open config file: " + config_file_path);
+    if (!m_fs.isOpened()) throw std::runtime_error("Failed to open config file: " + config_file_path);
 }
 
 std::map<int, MarkerParameter> TrackerConfig::get_marker_parameters() const {
     std::map<int, MarkerParameter> marker_parameters;
 
     cv::FileNode marker_node = m_fs["marker"];
-    if (marker_node.empty() || !marker_node.isMap())
+    if (marker_node.empty() || !marker_node.isSeq())
         throw std::runtime_error("Invalid or missing 'marker' configuration");
 
     for (const auto& entry : marker_node) {
-        int id = std::stoi(entry.name());
+        int id;
         double angle;
         float size;
+        entry["id"] >> id;
         entry["angle"] >> angle;
         entry["size"] >> size;
-        marker_parameters[id] = MarkerParameter{angle, size};
+        marker_parameters[id] = MarkerParameter::create(angle, size);
     }
 
-    return marker_parameters;
+    return std::move(marker_parameters);
 }
 
 cv::aruco::DetectorParameters TrackerConfig::get_aruco_detector_parameters() const {
     cv::aruco::DetectorParameters params;
 
     cv::FileNode det_node = m_fs["detector"];
-    if (det_node.empty() || !det_node.isMap())
-        throw std::runtime_error("Invalid or missing 'detector' configuration");
+    if (det_node.empty() || !det_node.isMap()) throw std::runtime_error("Invalid or missing 'detector' configuration");
 
     cv::FileNode params_node = det_node["parameters"];
     if (params_node.empty() || !params_node.isMap())
@@ -57,8 +56,7 @@ cv::aruco::DetectorParameters TrackerConfig::get_aruco_detector_parameters() con
 
 cv::aruco::Dictionary TrackerConfig::get_aruco_dictionary() const {
     cv::FileNode det_node = m_fs["detector"];
-    if (det_node.empty() || !det_node.isMap())
-        throw std::runtime_error("Invalid or missing 'detector' configuration");
+    if (det_node.empty() || !det_node.isMap()) throw std::runtime_error("Invalid or missing 'detector' configuration");
 
     cv::FileNode dict_node = det_node["dictionary"];
     if (dict_node.empty() || !dict_node.isString())
@@ -69,63 +67,64 @@ cv::aruco::Dictionary TrackerConfig::get_aruco_dictionary() const {
 
     static const std::map<std::string, int> dict_name_map = {
         {"DICT_ARUCO_ORIGINAL", cv::aruco::DICT_ARUCO_ORIGINAL},
-        {"DICT_4X4_50",   cv::aruco::DICT_4X4_50},
-        {"DICT_4X4_100",  cv::aruco::DICT_4X4_100},
-        {"DICT_4X4_250",  cv::aruco::DICT_4X4_250},
+        {"DICT_4X4_50", cv::aruco::DICT_4X4_50},
+        {"DICT_4X4_100", cv::aruco::DICT_4X4_100},
+        {"DICT_4X4_250", cv::aruco::DICT_4X4_250},
         {"DICT_4X4_1000", cv::aruco::DICT_4X4_1000},
-        {"DICT_5X5_50",   cv::aruco::DICT_5X5_50},
-        {"DICT_5X5_100",  cv::aruco::DICT_5X5_100},
-        {"DICT_5X5_250",  cv::aruco::DICT_5X5_250},
+        {"DICT_5X5_50", cv::aruco::DICT_5X5_50},
+        {"DICT_5X5_100", cv::aruco::DICT_5X5_100},
+        {"DICT_5X5_250", cv::aruco::DICT_5X5_250},
         {"DICT_5X5_1000", cv::aruco::DICT_5X5_1000},
-        {"DICT_6X6_50",   cv::aruco::DICT_6X6_50},
-        {"DICT_6X6_100",  cv::aruco::DICT_6X6_100},
-        {"DICT_6X6_250",  cv::aruco::DICT_6X6_250},
+        {"DICT_6X6_50", cv::aruco::DICT_6X6_50},
+        {"DICT_6X6_100", cv::aruco::DICT_6X6_100},
+        {"DICT_6X6_250", cv::aruco::DICT_6X6_250},
         {"DICT_6X6_1000", cv::aruco::DICT_6X6_1000},
-        {"DICT_7X7_50",   cv::aruco::DICT_7X7_50},
-        {"DICT_7X7_100",  cv::aruco::DICT_7X7_100},
-        {"DICT_7X7_250",  cv::aruco::DICT_7X7_250},
+        {"DICT_7X7_50", cv::aruco::DICT_7X7_50},
+        {"DICT_7X7_100", cv::aruco::DICT_7X7_100},
+        {"DICT_7X7_250", cv::aruco::DICT_7X7_250},
         {"DICT_7X7_1000", cv::aruco::DICT_7X7_1000},
     };
 
     auto it = dict_name_map.find(dict_name);
-    if (it == dict_name_map.end())
-        throw std::runtime_error("Unsupported ArUco dictionary: " + dict_name);
+    if (it == dict_name_map.end()) throw std::runtime_error("Unsupported ArUco dictionary: " + dict_name);
 
     return cv::aruco::getPredefinedDictionary(it->second);
 }
 
-const std::map<std::string, std::map<std::string, cv::Mat>>& TrackerConfig::get_camera_calibration_parameters() const {
-    if (m_cameras_parameters.empty()) {
-        std::string camera1_serial, camera2_serial;
-        m_fs["camera1_serial"] >> camera1_serial;
-        m_fs["camera2_serial"] >> camera2_serial;
+std::vector<CameraParameters> TrackerConfig::get_camera_calibration_parameters() const {
+    auto result = std::vector<CameraParameters>{};
+    std::string camera1_serial, camera2_serial;
 
-        cv::FileNode cameras_node = m_fs["cameras"];
-        if (cameras_node.empty() || !cameras_node.isMap())
-            throw std::runtime_error("Invalid or missing 'cameras' configuration");
+    m_fs["camera1_serial"] >> camera1_serial;
+    m_fs["camera2_serial"] >> camera2_serial;
 
-        for (const auto& serial : {camera1_serial, camera2_serial}) {
-            cv::FileNode cam_node = cameras_node[serial];
-            if (cam_node.empty() || !cam_node.isMap())
-                throw std::runtime_error("Missing or invalid camera configuration for: " + serial);
+    cv::FileNode cameras_node = m_fs["cameras"];
+    if (cameras_node.empty() || !cameras_node.isMap())
+        throw std::runtime_error("Invalid or missing 'cameras' configuration");
 
-            std::map<std::string, cv::Mat> cam_params;
+    for (const auto& serial : {camera1_serial, camera2_serial}) {
+        cv::FileNode cam_node = cameras_node[serial];
+        if (cam_node.empty() || !cam_node.isMap())
+            throw std::runtime_error("Missing or invalid camera configuration for: " + serial);
 
-            cv::Mat K, D;
-            cam_node["K"] >> K;
-            cam_node["D"] >> D;
+        cv::Mat K, D, T, R;
+        cam_node["K"] >> K;
+        cam_node["D"] >> D;
+        cam_node["T"] >> T;
+        cam_node["R"] >> R;
 
-            if (K.empty() || K.rows != 3 || K.cols != 3)
-                throw std::runtime_error("Invalid or missing 'K' matrix for camera: " + serial);
-            if (D.empty())
-                throw std::runtime_error("Invalid or missing 'D' vector for camera: " + serial);
-
-            cam_params["K"] = K;
-            cam_params["D"] = D;
-            m_cameras_parameters[serial] = std::move(cam_params);
-        }
+        if (K.empty() || K.rows != 3 || K.cols != 3)
+            throw std::runtime_error("Invalid or missing 'K' matrix for camera: " + serial);
+        if (D.empty() || D.rows != 1 || D.cols != 5)
+            throw std::runtime_error("Invalid or missing 'D' vector for camera: " + serial);
+        if (T.empty() || T.rows != 3 || T.cols != 1)
+            throw std::runtime_error("Invalid or missing 'T' vector for camera: " + serial);
+        if (R.empty() || R.rows != 3 || R.cols != 3)
+            throw std::runtime_error("Invalid or missing 'R' matrix for camera: " + serial);
+ 
+        result.push_back(CameraParameters{K, D, T, R, serial});
     }
-    return m_cameras_parameters;
+    return std::move(result);
 }
 
 }  // namespace tracking

@@ -22,7 +22,7 @@ public:
     void set_frame_callback(std::function<void(const int, const std::string &, rs2::frameset)> callback);
 
 signals:
-    void frames_received(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames);
+    void frames_received(std::vector<std::tuple<int, std::string, QImage>> frames);
     void error_occurred(const QString& err);
 
 private:

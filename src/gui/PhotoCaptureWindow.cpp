@@ -131,7 +131,7 @@ void PhotoCaptureWindow::on_update_capture_status(bool capturing) {
     }
 }
 
-void PhotoCaptureWindow::on_frame_received(std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frames) {
+void PhotoCaptureWindow::on_frame_received(std::vector<std::tuple<int, std::string, QImage>> frames) {
     if (m_start_btn->isEnabled() || frames.size() == 0) return;
 
     std::for_each(frames.begin(), frames.end(), [this](const auto& frameInfo) {
@@ -144,7 +144,6 @@ void PhotoCaptureWindow::on_frame_received(std::vector<std::tuple<int, std::stri
         }
 
         const QImage& img = std::get<2>(frameInfo);
-        const auto& depth_frame_ptr = std::get<3>(frameInfo);
 
         if (cameraId < 100 || cameraId >= 200) {
             if (!m_camera_widgets.contains(cameraId)) {
@@ -167,8 +166,6 @@ void PhotoCaptureWindow::on_frame_received(std::vector<std::tuple<int, std::stri
             } else {
                 m_camera_widgets[cameraId]->update_frame(img);
             }
-        } else if (depth_frame_ptr) {
-            // Handle depth frame
         }
 
         if (m_capturer && cameraId < 100) {

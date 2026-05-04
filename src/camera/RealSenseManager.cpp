@@ -121,51 +121,50 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                     }
                 }
 
-                std::vector<std::tuple<int, std::string, QImage, rs2::depth_frame>> frame_data;
+                std::vector<std::tuple<int, std::string, QImage>> frame_data;
 
                 rs2::video_frame color = processed_frames.get_color_frame();
 
                 if (color) {
                     QImage img((const uchar*)color.get_data(), color.get_width(), color.get_height(),
                                color.get_stride_in_bytes(), QImage::Format_RGB888);
-                    frame_data.emplace_back(cameraId, serial, img.copy(), nullptr);
+                    frame_data.emplace_back(cameraId, serial, img.copy());
                     if (log_frame) {
                         spdlog::debug("Color frame processed for cameraId: {}, serial: {}, timestamp: {}", cameraId, serial, color.get_timestamp());
                     }
                 }
 
-                rs2::depth_frame depth = processed_frames.get_depth_frame();
-                if (depth) {
-                    // Process depth frame if needed
-                    QImage depthImg((const uchar*)depth.get_data(), depth.get_width(), depth.get_height(),
-                                    depth.get_stride_in_bytes(), QImage::Format_Grayscale16);
-                    frame_data.emplace_back(cameraId + 100, serial, depthImg.copy(), depth);
-                    if (log_frame) {
-                        auto origin_depth = frames.get_depth_frame();
-                        spdlog::debug("Depth frame processed for cameraId: {}, serial: {}, timestamp: {}, resolution: {}x{}, original resolution: {}x{}", cameraId, serial, depth.get_timestamp(), depth.get_width(), depth.get_height(), origin_depth.get_width(), origin_depth.get_height());
-                    }
-                }
+                // rs2::depth_frame depth = processed_frames.get_depth_frame();
+                // if (depth) {
+                //     // Process depth frame if needed
+                //     QImage depthImg((const uchar*)depth.get_data(), depth.get_width(), depth.get_height(),
+                //                     depth.get_stride_in_bytes(), QImage::Format_Grayscale16);
+                //     frame_data.emplace_back(cameraId + 100, serial, depthImg.copy());
+                //     if (log_frame) {
+                //         auto origin_depth = frames.get_depth_frame();
+                //         spdlog::debug("Depth frame processed for cameraId: {}, serial: {}, timestamp: {}, resolution: {}x{}, original resolution: {}x{}", cameraId, serial, depth.get_timestamp(), depth.get_width(), depth.get_height(), origin_depth.get_width(), origin_depth.get_height());
+                //     }
+                // }
 
-                rs2::video_frame gray_frame = processed_frames.first(RS2_STREAM_INFRARED);
-                if (gray_frame) {
-                    QImage grayImg((const uchar*)gray_frame.get_data(), gray_frame.get_width(), gray_frame.get_height(),
-                                   gray_frame.get_stride_in_bytes(), QImage::Format_Grayscale8);
-                    frame_data.emplace_back(cameraId + 200, serial, grayImg.copy(), nullptr);
-                    if (log_frame) {
-                        spdlog::debug("Infrared frame processed for cameraId: {}, serial: {}, timestamp: {}", cameraId, serial, gray_frame.get_timestamp());
-                    }
-                }
-
-                if (m_frame_callback) {
-                    spdlog::debug("processing frameset");
-                    m_frame_callback(cameraId, serial, processed_frames);
-                }
+                // rs2::video_frame gray_frame = processed_frames.first(RS2_STREAM_INFRARED);
+                // if (gray_frame) {
+                //     QImage grayImg((const uchar*)gray_frame.get_data(), gray_frame.get_width(), gray_frame.get_height(),
+                //                    gray_frame.get_stride_in_bytes(), QImage::Format_Grayscale8);
+                //     frame_data.emplace_back(cameraId + 200, serial, grayImg.copy());
+                //     if (log_frame) {
+                //         spdlog::debug("Infrared frame processed for cameraId: {}, serial: {}, timestamp: {}", cameraId, serial, gray_frame.get_timestamp());
+                //     }
+                // }
 
                 if (frame_data.size() > 0) {
                     if (log_frame) {
                         spdlog::debug("Emitting frames_received signal for cameraId: {}, serial: {}, frame count: {}", cameraId, serial, frame_data.size());
                     }
                     emit frames_received(std::move(frame_data));
+                }
+
+                if (m_frame_callback) {
+                    m_frame_callback(cameraId, serial, processed_frames);
                 }
             }
         }
