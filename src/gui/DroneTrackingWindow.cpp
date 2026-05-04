@@ -29,6 +29,7 @@ DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* paren
 
     connect(m_vision_tracker.get(), &tracking::VisionTracker::error_occurred, this, &DroneTrackingWindow::error_occurred);
     connect(m_vision_tracker.get(), &tracking::VisionTracker::frames_received, this, &DroneTrackingWindow::frames_received);
+    connect(m_vision_tracker.get(), &tracking::VisionTracker::publish_message, m_webrtc_manager.get(), &WebRtcManager::publish_message);
 }
 
 DroneTrackingWindow::~DroneTrackingWindow() = default;

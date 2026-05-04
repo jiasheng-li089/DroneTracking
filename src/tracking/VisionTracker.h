@@ -1,12 +1,36 @@
 #pragma once
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QObject>
 #include <librealsense2/rs.hpp>
 #include <opencv2/opencv.hpp>
+#include <spdlog/fmt/ranges.h>
 
 class rs2::frameset;
 
 namespace tracking {
+
+struct ObjectPose {
+    double x, y, z;           // Position in world coordinates
+    double roll, pitch, yaw;  // Orientation in world coordinates
+
+    std::string to_json() const {
+        return fmt::format(
+            R"({{"position": {{"x": {:.4f}, "y": {:.4f}, "z": {:.4f}}}, "orientation": {{"roll": {:.4f}, "pitch": {:.4f}, "yaw": {:.4f}}}}})",
+            x, y, z, roll, pitch, yaw);
+    };
+
+    static ObjectPose from_json(const std::string& json_str) {
+        QJsonObject root = QJsonDocument::fromJson(QByteArray::fromStdString(json_str)).object();
+        QJsonObject pos = root["position"].toObject();
+        QJsonObject ori = root["orientation"].toObject();
+        return ObjectPose{
+            pos["x"].toDouble(), pos["y"].toDouble(), pos["z"].toDouble(),
+            ori["roll"].toDouble(), ori["pitch"].toDouble(), ori["yaw"].toDouble()
+        };
+    }
+};
 
 struct CameraParameters;  // Forward declaration
 
@@ -25,6 +49,7 @@ class VisionTracker : public QObject {
     signals:
     void error_occurred(const QString& error_message);
     void frames_received(std::vector<std::tuple<int, std::string, QImage>> frames);
+    void publish_message(const std::string message);
 
    private:
     cv::Mat preprocess_frame(const std::string& serial, const rs2::frameset& frame);

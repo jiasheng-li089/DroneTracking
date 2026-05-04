@@ -30,6 +30,11 @@ public:
     // Send message via DataChannel
     void sendMessage(const std::string& message);
 
+    public slots:
+    void publish_message(const std::string& message) {
+        sendMessage(message);
+    }
+
 private:
     std::unique_ptr<rtc::PeerConnection> m_peer_connection;
     std::shared_ptr<rtc::DataChannel> m_data_channel;

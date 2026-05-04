@@ -1,6 +1,5 @@
 #include "VisionTracker.h"
 
-#include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
 #include <QImage>
@@ -112,9 +111,28 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         // cam_params.R, cam_params.T: P_camera = R * P_world + T
         // inverted:                   P_world  = R^T * (P_camera - T)
         cv::Mat pos_world = cam_params.R.t() * (cv::Mat(tvecs.at(i)) - cam_params.T);
+
+        cv::Mat R_marker_cam;
+        cv::Rodrigues(rvecs.at(i), R_marker_cam);
+        cv::Mat R_marker_world = cam_params.R.t() * R_marker_cam;
+
+        // ZYX Euler angles (yaw-pitch-roll) in degrees
+        double yaw = std::atan2(R_marker_world.at<double>(1, 0), R_marker_world.at<double>(0, 0)) * 180.0 / CV_PI;
+        double pitch = std::atan2(-R_marker_world.at<double>(2, 0),
+                                  std::hypot(R_marker_world.at<double>(2, 1), R_marker_world.at<double>(2, 2))) *
+                       180.0 / CV_PI;
+        double roll = std::atan2(R_marker_world.at<double>(2, 1), R_marker_world.at<double>(2, 2)) * 180.0 / CV_PI;
+
+        ObjectPose pose{pos_world.at<double>(0), pos_world.at<double>(1), pos_world.at<double>(2), roll, pitch, yaw};
+
+        if (i == 0) // Only publish the first detected marker's pose for simplicity, can be extended to multiple markers if needed
+        emit publish_message(pose.to_json());
+
         if (log_enable)
-            spdlog::info("Marker ID: {}, camera: {}, world pos (m): [{:.3f}, {:.3f}, {:.3f}]", marker_ids[i], serial,
-                         pos_world.at<double>(0), pos_world.at<double>(1), pos_world.at<double>(2));
+            spdlog::info(
+                "Marker ID: {}, camera: {}, world pos (m): [{:.3f}, {:.3f}, {:.3f}], "
+                "world rot (deg) yaw={:.1f} pitch={:.1f} roll={:.1f}",
+                marker_ids[i], serial, pose.x, pose.y, pose.z, pose.yaw, pose.pitch, pose.roll);
     }
 
     // average the relative positions of the target (aruco) to the cameras to get a stable position estimation of the
