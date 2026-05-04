@@ -121,7 +121,7 @@ void WebRtcManager::setOnMessageCallback(std::function<void(const std::string&)>
 
 void WebRtcManager::sendMessage(const std::string& message) {
     if (m_data_channel && m_data_channel->isOpen()) {
-        spdlog::debug("Sending message on data channel: {}", message);
+        // spdlog::debug("Sending message on data channel: {}", message);
         m_data_channel->send(message);
     } else {
         spdlog::error("Cannot send message, data channel is invalid or not open: {}", message);
