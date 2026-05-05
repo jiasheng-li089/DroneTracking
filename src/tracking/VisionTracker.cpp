@@ -205,7 +205,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
             world_tvecs.push_back(tvec_world);
         }
 
-        ObjectPose pose{tvec_world[0], tvec_world[1], tvec_world[2], roll, pitch, yaw};
+        ObjectPose pose{tvec_world[0], tvec_world[1], tvec_world[2], roll, pitch, yaw, current_timestamp_ms()};
         emit update_camera_status(fmt::format("Marker #{}_{}", serial, known_marker_ids[i]),
                                   fmt::format("x={:.4f}, y={:.4f}, z={:.4f}, "
                                               "yaw={:.4f}, pitch={:.4f}, roll={:.4f}",
@@ -262,10 +262,13 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
                                    std::hypot(R_drone_avg.at<double>(2, 1), R_drone_avg.at<double>(2, 2))) * 180.0 / CV_PI;
     double avg_roll  = std::atan2(R_drone_avg.at<double>(2, 1), R_drone_avg.at<double>(2, 2)) * 180.0 / CV_PI;
 
-    ObjectPose averaged_pose{t_drone_avg[0], t_drone_avg[1], t_drone_avg[2], avg_roll, avg_pitch, avg_yaw};
+    ObjectPose averaged_pose{t_drone_avg[0], t_drone_avg[1], t_drone_avg[2], avg_roll, avg_pitch, avg_yaw, current_timestamp_ms()};
     emit update_camera_status(fmt::format("Drone Pose #{}", serial), fmt::format("x={:.4f}, y={:.4f}, z={:.4f}, yaw={:.4f}, pitch={:.4f}, roll={:.4f}",
                                   averaged_pose.x, averaged_pose.y, averaged_pose.z,
                                   averaged_pose.yaw, averaged_pose.pitch, averaged_pose.roll));
+
+    // TODO, beside average multiple markers' poses to get the drone's pose, 
+    // the calculated drone pose based on multiple cameras should also be considered to get a more robust estimation.
 
     // publish the stabilized drone pose to the network
     emit publish_message(averaged_pose.to_json());

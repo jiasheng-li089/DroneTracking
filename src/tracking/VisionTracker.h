@@ -5,8 +5,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
+#include <chrono>
 #include <librealsense2/rs.hpp>
 #include <opencv2/opencv.hpp>
+
+#include "../common/common.h"
 
 class rs2::frameset;
 
@@ -16,18 +19,27 @@ struct ObjectPose {
     double x, y, z;           // Position in world coordinates
     double roll, pitch, yaw;  // Orientation in world coordinates
 
+    long timestamp = 0;  // Timestamp of the pose estimation, can be used for synchronization
+
     std::string to_json() const {
         return fmt::format(
-            R"({{"position": {{"x": {:.4f}, "y": {:.4f}, "z": {:.4f}}}, "orientation": {{"roll": {:.4f}, "pitch": {:.4f}, "yaw": {:.4f}}}}})",
-            x, y, z, roll, pitch, yaw);
+            R"({{"position": {{"x": {:.4f}, "y": {:.4f}, "z": {:.4f}}}, "orientation": {{"roll": {:.4f}, "pitch": {:.4f}, "yaw": {:.4f}}}, "timestamp": {}}})",
+            x, y, z, roll, pitch, yaw, timestamp);
     };
 
     static ObjectPose from_json(const std::string& json_str) {
         QJsonObject root = QJsonDocument::fromJson(QByteArray::fromStdString(json_str)).object();
         QJsonObject pos = root["position"].toObject();
         QJsonObject ori = root["orientation"].toObject();
-        return ObjectPose{pos["x"].toDouble(),    pos["y"].toDouble(),     pos["z"].toDouble(),
-                          ori["roll"].toDouble(), ori["pitch"].toDouble(), ori["yaw"].toDouble()};
+        return ObjectPose{
+            pos["x"].toDouble(),
+            pos["y"].toDouble(),
+            pos["z"].toDouble(),
+            ori["roll"].toDouble(),
+            ori["pitch"].toDouble(),
+            ori["yaw"].toDouble(),
+            current_timestamp_ms()
+        };
     }
 };
 
