@@ -83,7 +83,7 @@ void DroneTrackingWindow::setup_ui() {
     // status label container
     auto label_widget = new QWidget(root_widget);
     m_labels_container = new QGridLayout(label_widget);
-    label_widget->setFixedHeight(70);
+    label_widget->setFixedHeight(100);
     layout->addWidget(label_widget);
 
     // log text edit

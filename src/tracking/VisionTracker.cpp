@@ -180,7 +180,8 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
                 QImage::Format_RGB888);
     emit frames_received(std::vector<std::tuple<int, std::string, QImage>>{{camera_id + 200, serial, qimg.copy()}});
 
-    std::map<int, ObjectPose> marker_poses;
+    std::vector<cv::Mat> world_R_matrices;
+    std::vector<cv::Vec3d> world_tvecs;
 
     // transform each marker pose from camera frame to world (benchmark marker) frame
     // cam_params->R and cam_params->T are calibrated per-camera, so apply once for all cameras
@@ -199,9 +200,12 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
                        180.0 / CV_PI;
         double roll = std::atan2(R_marker_world.at<double>(2, 1), R_marker_world.at<double>(2, 2)) * 180.0 / CV_PI;
 
-        ObjectPose pose{tvec_world[0], tvec_world[1], tvec_world[2], roll, pitch, yaw};
-        marker_poses[known_marker_ids[i]] = pose;
+        if (known_marker_ids[i] != m_benchmark_parameter->id) {
+            world_R_matrices.push_back(R_marker_world.clone());
+            world_tvecs.push_back(tvec_world);
+        }
 
+        ObjectPose pose{tvec_world[0], tvec_world[1], tvec_world[2], roll, pitch, yaw};
         emit update_camera_status(fmt::format("Marker #{}_{}", serial, known_marker_ids[i]),
                                   fmt::format("x={:.4f}, y={:.4f}, z={:.4f}, "
                                               "yaw={:.4f}, pitch={:.4f}, roll={:.4f}",
@@ -227,12 +231,43 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         }
     }
 
-    // TODO average the relative positions of the target (aruco) to the cameras to get a stable position estimation of
-    // the target (aruco)
-    ObjectPose averaged_pose{0, 0, 0, 0, 0, 0};
-    // how to average multiple marker positions to get the drone position???
+    // Average marker poses to compute drone body pose.
+    // Position: arithmetic mean of all world tvecs.
+    // Rotation: undo each marker's known body-relative angle (around Z), sum the resulting
+    //           rotation matrices, then re-orthogonalize via SVD (geodesic mean on SO(3)).
+    cv::Vec3d t_drone_sum(0, 0, 0);
+    cv::Mat R_drone_sum = cv::Mat::zeros(3, 3, CV_64F);
 
-    // publish the stablized position to the network
+    for (size_t i = 0; i < world_R_matrices.size(); ++i) {
+        t_drone_sum += world_tvecs[i];
+
+        // undo the marker's angular offset relative to drone body (rotation around Z)
+        double angle_rad = -known_marker_parameters[i].angle * CV_PI / 180.0;
+        double c = std::cos(angle_rad), s = std::sin(angle_rad);
+        cv::Mat Rz = (cv::Mat_<double>(3, 3) << c, -s, 0, s, c, 0, 0, 0, 1);
+        R_drone_sum += world_R_matrices[i] * Rz;
+    }
+
+    double n = static_cast<double>(world_R_matrices.size());
+    cv::Vec3d t_drone_avg = t_drone_sum / n;
+
+    // re-orthogonalize the summed rotation matrix to the nearest proper rotation
+    cv::Mat U, S, Vt;
+    cv::SVD::compute(R_drone_sum, S, U, Vt);
+    cv::Mat R_drone_avg = U * Vt;
+    if (cv::determinant(R_drone_avg) < 0) R_drone_avg = -R_drone_avg;
+
+    double avg_yaw   = std::atan2(R_drone_avg.at<double>(1, 0), R_drone_avg.at<double>(0, 0)) * 180.0 / CV_PI;
+    double avg_pitch = std::atan2(-R_drone_avg.at<double>(2, 0),
+                                   std::hypot(R_drone_avg.at<double>(2, 1), R_drone_avg.at<double>(2, 2))) * 180.0 / CV_PI;
+    double avg_roll  = std::atan2(R_drone_avg.at<double>(2, 1), R_drone_avg.at<double>(2, 2)) * 180.0 / CV_PI;
+
+    ObjectPose averaged_pose{t_drone_avg[0], t_drone_avg[1], t_drone_avg[2], avg_roll, avg_pitch, avg_yaw};
+    emit update_camera_status(fmt::format("Drone Pose #{}", serial), fmt::format("x={:.4f}, y={:.4f}, z={:.4f}, yaw={:.4f}, pitch={:.4f}, roll={:.4f}",
+                                  averaged_pose.x, averaged_pose.y, averaged_pose.z,
+                                  averaged_pose.yaw, averaged_pose.pitch, averaged_pose.roll));
+
+    // publish the stabilized drone pose to the network
     emit publish_message(averaged_pose.to_json());
 }
 
