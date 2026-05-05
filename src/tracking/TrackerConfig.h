@@ -9,13 +9,14 @@
 namespace tracking {
 
 struct MarkerParameter {
+    int id;
     double angle;
     float size;
 
     cv::Mat obj_points;
 
-    static MarkerParameter create(double angle, float size) {
-        auto result = MarkerParameter{angle, size, cv::Mat(4, 1, CV_32FC3)};  // Assuming 4 corners with 3D coordinates (x, y, z)
+    static MarkerParameter create(int id, double angle, float size) {
+        auto result = MarkerParameter{id, angle, size, cv::Mat(4, 1, CV_32FC3)};  // Assuming 4 corners with 3D coordinates (x, y, z)
         float half_size = size / 2.0f;
 
         result.obj_points.at<cv::Vec3f>(0, 0) = cv::Vec3f(-half_size, half_size, 0);   // Top-left
@@ -33,6 +34,8 @@ struct CameraParameters {
     cv::Mat T;  // Translation vector (extrinsic)
     cv::Mat R;  // Rotation matrix (extrinsic)
 
+    bool calibrated = false;  // Flag to indicate if the camera has been calibrated
+
     std::string serial;  // Camera serial number for identification
 };
 
@@ -43,6 +46,8 @@ class TrackerConfig {
     ~TrackerConfig() = default;
 
     std::map<int, MarkerParameter> get_marker_parameters() const;
+
+    MarkerParameter get_benchmark_parameter() const;
 
     cv::aruco::DetectorParameters get_aruco_detector_parameters() const;
 

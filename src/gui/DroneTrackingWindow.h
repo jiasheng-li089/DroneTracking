@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QMap>
 #include <QTextEdit>
+#include <QLabel>
 #include <QGridLayout>
 
 #include <librealsense2/rs.hpp>
@@ -46,7 +47,11 @@ class DroneTrackingWindow : public QMainWindow {
 
         QGridLayout * m_camera_container{};
 
+        QGridLayout * m_labels_container{};
+
         QMap<int, CameraWidget*> m_camera_widgets;
+
+        QMap<std::string, QLabel*> m_camera_labels;
 
         std::string m_config_file;
 
@@ -67,4 +72,6 @@ class DroneTrackingWindow : public QMainWindow {
         void on_widget_status_update(QWidget* sender, bool enable);
 
         void on_webrtc_connection_state(bool connected);
+
+        void on_update_camera_status(std::string serial, std::string status);
 };

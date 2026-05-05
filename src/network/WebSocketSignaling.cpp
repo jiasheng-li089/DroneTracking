@@ -547,7 +547,8 @@ void WebSocketSignaling::on_text_message_received(const QString& message) {
             it->second.set_value(message.toStdString());
             m_pending_offers.erase(it);
         } else {
-            spdlog::error("No pending offer found for transaction ID: {}", transaction);
+            // INFO maybe the callback is already timed out and cleaned up, so just log a warning here
+            spdlog::warn("No pending offer found for transaction ID: {}", transaction);
         }
     }
 }

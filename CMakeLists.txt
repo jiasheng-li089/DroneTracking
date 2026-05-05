@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(DEBUG_CHANNEL "Enable debug webrtc data channel" OFF)
+option(ENABLE_DEPTH "Enable the depth stream for tracking" OFF)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -107,6 +108,9 @@ link_directories(
 foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
     if(DEBUG_CHANNEL)
         target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE DEBUG_CHANNEL)
+    endif()
+    if(ENABLE_DEPTH)
+        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE ENABLE_DEPTH_CAMERA)
     endif()
     target_link_libraries("${PROJECT_NAME}_${key}" PRIVATE
             Qt6::Core

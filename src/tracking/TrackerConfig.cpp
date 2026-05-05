@@ -23,7 +23,7 @@ std::map<int, MarkerParameter> TrackerConfig::get_marker_parameters() const {
         entry["id"] >> id;
         entry["angle"] >> angle;
         entry["size"] >> size;
-        marker_parameters[id] = MarkerParameter::create(angle, size);
+        marker_parameters[id] = MarkerParameter::create(id, angle, size);
     }
 
     return std::move(marker_parameters);
@@ -110,21 +110,36 @@ std::vector<CameraParameters> TrackerConfig::get_camera_calibration_parameters()
         cv::Mat K, D, T, R;
         cam_node["K"] >> K;
         cam_node["D"] >> D;
-        cam_node["T"] >> T;
-        cam_node["R"] >> R;
+        // cam_node["T"] >> T;
+        // cam_node["R"] >> R;
 
         if (K.empty() || K.rows != 3 || K.cols != 3)
             throw std::runtime_error("Invalid or missing 'K' matrix for camera: " + serial);
         if (D.empty() || D.rows != 1 || D.cols != 5)
             throw std::runtime_error("Invalid or missing 'D' vector for camera: " + serial);
-        if (T.empty() || T.rows != 3 || T.cols != 1)
-            throw std::runtime_error("Invalid or missing 'T' vector for camera: " + serial);
-        if (R.empty() || R.rows != 3 || R.cols != 3)
-            throw std::runtime_error("Invalid or missing 'R' matrix for camera: " + serial);
+        // if (T.empty() || T.rows != 3 || T.cols != 1)
+        //     throw std::runtime_error("Invalid or missing 'T' vector for camera: " + serial);
+        // if (R.empty() || R.rows != 3 || R.cols != 3)
+        //     throw std::runtime_error("Invalid or missing 'R' matrix for camera: " + serial);
  
-        result.push_back(CameraParameters{K, D, T, R, serial});
+        result.push_back(CameraParameters{K, D, T, R, false, serial});
     }
     return std::move(result);
+}
+
+MarkerParameter TrackerConfig::get_benchmark_parameter() const {
+    cv::FileNode benchmark_node = m_fs["benchmark"];
+    if (benchmark_node.empty() || !benchmark_node.isMap())
+        throw std::runtime_error("Invalid or missing 'benchmark' configuration");
+
+    int id;
+    double angle;
+    float size;
+    benchmark_node["id"] >> id;
+    benchmark_node["angle"] >> angle;
+    benchmark_node["size"] >> size;
+
+    return MarkerParameter::create(id, angle, size);
 }
 
 }  // namespace tracking

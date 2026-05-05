@@ -1,35 +1,42 @@
 #include "DroneTrackingWindow.h"
 
+#include <spdlog/spdlog.h>
+
 #include <QBoxLayout>
 #include <QPushButton>
-
-#include <spdlog/spdlog.h>
 
 #include "../camera/RealSenseManager.h"
 #include "../network/WebRtcManager.h"
 #include "../network/WebSocketSignaling.h"
-#include "../tracking/VisionTracker.h"
 #include "../tracking/TrackerConfig.h"
+#include "../tracking/VisionTracker.h"
 #include "CameraWidget.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {
-
-    m_webrtc_manager = std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol"));
-    m_vision_tracker = std::make_unique<tracking::VisionTracker>(std::make_shared<tracking::TrackerConfig>(m_config_file));
+    m_webrtc_manager =
+        std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol"));
+    m_vision_tracker =
+        std::make_unique<tracking::VisionTracker>(std::make_shared<tracking::TrackerConfig>(m_config_file));
 
     setup_ui();
 
     connect(this, &DroneTrackingWindow::update_widget_status, this, &DroneTrackingWindow::on_widget_status_update);
     connect(this, &DroneTrackingWindow::append_log, m_log_te, &QTextEdit::append);
-    connect(m_webrtc_manager.get(), &WebRtcManager::on_connection_state, this, &DroneTrackingWindow::on_webrtc_connection_state);
+    connect(m_webrtc_manager.get(), &WebRtcManager::on_connection_state, this,
+            &DroneTrackingWindow::on_webrtc_connection_state);
 
     connect(m_rs_manager.get(), &RealSenseManager::frames_received, this, &DroneTrackingWindow::frames_received);
     connect(m_rs_manager.get(), &RealSenseManager::error_occurred, this, &DroneTrackingWindow::error_occurred);
 
-    connect(m_vision_tracker.get(), &tracking::VisionTracker::error_occurred, this, &DroneTrackingWindow::error_occurred);
-    connect(m_vision_tracker.get(), &tracking::VisionTracker::frames_received, this, &DroneTrackingWindow::frames_received);
-    connect(m_vision_tracker.get(), &tracking::VisionTracker::publish_message, m_webrtc_manager.get(), &WebRtcManager::publish_message);
+    connect(m_vision_tracker.get(), &tracking::VisionTracker::error_occurred, this,
+            &DroneTrackingWindow::error_occurred);
+    connect(m_vision_tracker.get(), &tracking::VisionTracker::frames_received, this,
+            &DroneTrackingWindow::frames_received);
+    connect(m_vision_tracker.get(), &tracking::VisionTracker::publish_message, m_webrtc_manager.get(),
+            &WebRtcManager::publish_message);
+    connect(m_vision_tracker.get(), &tracking::VisionTracker::update_camera_status, this,
+            &DroneTrackingWindow::on_update_camera_status);
 }
 
 DroneTrackingWindow::~DroneTrackingWindow() = default;
@@ -59,27 +66,50 @@ void DroneTrackingWindow::setup_ui() {
         btn->setEnabled(button_id % 2 == 1);
     }
 
-    #ifdef DEBUG_CHANNEL
+#ifdef DEBUG_CHANNEL
     auto debug_channel_btn = new QPushButton("Send Debug Message", root_widget);
     button_layout->addWidget(debug_channel_btn);
-    connect(debug_channel_btn, &QPushButton::clicked, this, [this]() {
-        m_webrtc_manager->sendMessage("Hello from debug channel!");
-    });
-    #endif
+    connect(debug_channel_btn, &QPushButton::clicked, this,
+            [this]() { m_webrtc_manager->sendMessage("Hello from debug channel!"); });
+#endif
 
     layout->addLayout(button_layout);
 
+    // camera widget container
     auto camera_widget = new QWidget(root_widget);
     m_camera_container = new QGridLayout(camera_widget);
-
     layout->addWidget(camera_widget);
 
+    // status label container
+    auto label_widget = new QWidget(root_widget);
+    m_labels_container = new QGridLayout(label_widget);
+    label_widget->setFixedHeight(70);
+    layout->addWidget(label_widget);
+
+    // log text edit
     m_log_te = new QTextEdit(root_widget);
     m_log_te->setMaximumHeight(150);
     m_log_te->setReadOnly(true);
     layout->addWidget(m_log_te);
 
     this->setCentralWidget(root_widget);
+}
+
+void DroneTrackingWindow::on_update_camera_status(std::string serial, std::string status) {
+    QString q_serial = QString::fromStdString(serial);
+    QString q_status = QString("%1: %2").arg(q_serial).arg(QString::fromStdString(status));
+
+    if (!m_camera_labels.contains(serial)) {
+        QLabel* label = new QLabel(this);
+        label->setText(q_status);
+        int count = m_camera_labels.size();
+        int row = count / 2;
+        int col = count % 2;
+        m_labels_container->addWidget(label, row, col);
+        m_camera_labels[serial] = label;
+    } else {
+        m_camera_labels[serial]->setText(q_status);
+    }
 }
 
 void DroneTrackingWindow::on_widget_status_update(QWidget* sender, bool enable) { sender->setEnabled(enable); }
@@ -117,15 +147,15 @@ void DroneTrackingWindow::on_webrtc_connection_state(bool connected) {
         on_widget_status_update(m_start_tracking_btn, false);
         on_widget_status_update(m_stop_tracking_btn, true);
 
-        m_rs_manager->set_frame_callback(std::bind(&tracking::VisionTracker::process_frames, m_vision_tracker.get(), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        m_rs_manager->set_frame_callback(std::bind(&tracking::VisionTracker::process_frames, m_vision_tracker.get(),
+                                                   std::placeholders::_1, std::placeholders::_2,
+                                                   std::placeholders::_3));
     } else {
         m_log_te->append("WebRTC connection lost");
         on_widget_status_update(m_start_tracking_btn, true);
         on_widget_status_update(m_stop_tracking_btn, false);
         m_rs_manager->set_frame_callback(nullptr);
     }
-
-
 }
 
 void DroneTrackingWindow::start_tracking() {
@@ -135,7 +165,6 @@ void DroneTrackingWindow::start_tracking() {
     on_widget_status_update(m_stop_tracking_btn, false);
 
     std::thread([this]() {
-
         try {
             m_webrtc_manager->connect();
         } catch (const std::exception& ex) {

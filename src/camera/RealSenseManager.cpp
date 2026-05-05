@@ -1,10 +1,12 @@
 #include "RealSenseManager.h"
-#include "logger.h"
 
 #include <librealsense2/h/rs_sensor.h>
-#include <librealsense2/rs.hpp>
 #include <spdlog/spdlog.h>
+
 #include <chrono>
+#include <librealsense2/rs.hpp>
+
+#include "logger.h"
 
 RealSenseManager::RealSenseManager(QObject* parent) : QObject(parent), m_running(false) {}
 
@@ -60,12 +62,15 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
         cfg.enable_device(serial);
         // Request color stream
         cfg.enable_stream(RS2_STREAM_COLOR, 1920, 1080, RS2_FORMAT_RGB8, 30);
+
+#ifdef ENABLE_DEPTH_CAMERA
         // Request infra streams (1 and 2 usually for stereo)
         // Some older librealsense versions or specific cameras might not support
         // both at 640x480 at 30 fps If they fail to start, config fallback might be
         // needed, but this is standard for D435.
         cfg.enable_stream(RS2_STREAM_DEPTH, 1024, 768, RS2_FORMAT_Z16, 30);
         cfg.enable_stream(RS2_STREAM_INFRARED, 1024, 768, RS2_FORMAT_Y8, 30);
+#endif
 
         for (int retry = 0; retry < 5; ++retry) {
             try {
@@ -73,41 +78,46 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                 break;
             } catch (const rs2::error& e) {
                 if (retry == 4) throw;
-                spdlog::warn("Camera {} pipeline start failed (attempt {}): {}, retrying...", cameraId, retry + 1, e.what());
+                spdlog::warn("Camera {} pipeline start failed (attempt {}): {}, retrying...", cameraId, retry + 1,
+                             e.what());
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
         }
-
-        rs2::align align_to_color(RS2_STREAM_COLOR);
         spdlog::debug("Camera {} (Serial: {}) pipeline started", cameraId, serial);
+
+#ifdef ENABLE_DEPTH_CAMERA
+        rs2::align align_to_color(RS2_STREAM_COLOR);
 
         for (auto& sensor : p.get_active_profile().get_device().query_sensors()) {
             if (!sensor.is<rs2::depth_sensor>()) continue;
             for (int retry = 0; retry < 3; ++retry) {
                 try {
-                    if (sensor.supports(RS2_OPTION_MIN_DISTANCE))
-                        sensor.set_option(RS2_OPTION_MIN_DISTANCE, 0.25f);
-                    if (sensor.supports(RS2_OPTION_MAX_DISTANCE))
-                        sensor.set_option(RS2_OPTION_MAX_DISTANCE, 6.5f);
+                    if (sensor.supports(RS2_OPTION_MIN_DISTANCE)) sensor.set_option(RS2_OPTION_MIN_DISTANCE, 0.25f);
+                    if (sensor.supports(RS2_OPTION_MAX_DISTANCE)) sensor.set_option(RS2_OPTION_MAX_DISTANCE, 6.5f);
                     break;
                 } catch (const rs2::error& e) {
                     if (retry == 2) throw;
                     spdlog::warn("set_option failed (attempt {}): {}, retrying...", retry + 1, e.what());
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                    emit error_occurred(QString("Camera %1 option set failed (attempt %2): %3").arg(cameraId).arg(retry + 1).arg(e.what()));
+                    emit error_occurred(QString("Camera %1 option set failed (attempt %2): %3")
+                                            .arg(cameraId)
+                                            .arg(retry + 1)
+                                            .arg(e.what()));
                 }
             }
             break;
         }
+#endif
 
         while (m_running) {
             rs2::frameset frames;
             if (p.try_wait_for_frames(&frames,
-                                      50)) {      // 50ms timeout to avoid busy wait
+                                      50)) {  // 50ms timeout to avoid busy wait
                 const bool log_frame = frames.get_frame_number() % 30 == 0;
 
                 if (log_frame) {
-                    spdlog::debug("Frameset received from cameraId: {}, serial: {}, frame #{}", cameraId, serial, frames.get_frame_number());
+                    spdlog::debug("Frameset received from cameraId: {}, serial: {}, frame #{}", cameraId, serial,
+                                  frames.get_frame_number());
                 }
 
                 rs2::frameset processed_frames = frames;
@@ -130,7 +140,8 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                                color.get_stride_in_bytes(), QImage::Format_RGB888);
                     frame_data.emplace_back(cameraId, serial, img.copy());
                     if (log_frame) {
-                        spdlog::debug("Color frame processed for cameraId: {}, serial: {}, timestamp: {}", cameraId, serial, color.get_timestamp());
+                        spdlog::debug("Color frame processed for cameraId: {}, serial: {}, timestamp: {}", cameraId,
+                                      serial, color.get_timestamp());
                     }
                 }
 
@@ -142,23 +153,28 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                 //     frame_data.emplace_back(cameraId + 100, serial, depthImg.copy());
                 //     if (log_frame) {
                 //         auto origin_depth = frames.get_depth_frame();
-                //         spdlog::debug("Depth frame processed for cameraId: {}, serial: {}, timestamp: {}, resolution: {}x{}, original resolution: {}x{}", cameraId, serial, depth.get_timestamp(), depth.get_width(), depth.get_height(), origin_depth.get_width(), origin_depth.get_height());
+                //         spdlog::debug("Depth frame processed for cameraId: {}, serial: {}, timestamp: {}, resolution:
+                //         {}x{}, original resolution: {}x{}", cameraId, serial, depth.get_timestamp(),
+                //         depth.get_width(), depth.get_height(), origin_depth.get_width(), origin_depth.get_height());
                 //     }
                 // }
 
                 // rs2::video_frame gray_frame = processed_frames.first(RS2_STREAM_INFRARED);
                 // if (gray_frame) {
-                //     QImage grayImg((const uchar*)gray_frame.get_data(), gray_frame.get_width(), gray_frame.get_height(),
+                //     QImage grayImg((const uchar*)gray_frame.get_data(), gray_frame.get_width(),
+                //     gray_frame.get_height(),
                 //                    gray_frame.get_stride_in_bytes(), QImage::Format_Grayscale8);
                 //     frame_data.emplace_back(cameraId + 200, serial, grayImg.copy());
                 //     if (log_frame) {
-                //         spdlog::debug("Infrared frame processed for cameraId: {}, serial: {}, timestamp: {}", cameraId, serial, gray_frame.get_timestamp());
+                //         spdlog::debug("Infrared frame processed for cameraId: {}, serial: {}, timestamp: {}",
+                //         cameraId, serial, gray_frame.get_timestamp());
                 //     }
                 // }
 
                 if (frame_data.size() > 0) {
                     if (log_frame) {
-                        spdlog::debug("Emitting frames_received signal for cameraId: {}, serial: {}, frame count: {}", cameraId, serial, frame_data.size());
+                        spdlog::debug("Emitting frames_received signal for cameraId: {}, serial: {}, frame count: {}",
+                                      cameraId, serial, frame_data.size());
                     }
                     emit frames_received(std::move(frame_data));
                 }
@@ -176,6 +192,6 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
     }
 }
 
-void RealSenseManager::set_frame_callback(std::function<void(const int, const std::string &, rs2::frameset)> callback) {
+void RealSenseManager::set_frame_callback(std::function<void(const int, const std::string&, rs2::frameset)> callback) {
     m_frame_callback = std::move(callback);
 }
