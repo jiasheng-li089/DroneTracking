@@ -23,7 +23,11 @@ std::map<int, MarkerParameter> TrackerConfig::get_marker_parameters() const {
         entry["id"] >> id;
         entry["angle"] >> angle;
         entry["size"] >> size;
-        marker_parameters[id] = MarkerParameter::create(id, angle, size);
+        cv::Vec3d drone_pose_offset(0, 0, 0);
+        if (auto offset_node = entry["drone_pose_offset"]; !offset_node.empty()) {
+            offset_node >> drone_pose_offset;
+        }
+        marker_parameters[id] = MarkerParameter::create(id, angle, size, drone_pose_offset);
     }
 
     return std::move(marker_parameters);

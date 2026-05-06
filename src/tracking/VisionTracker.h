@@ -6,12 +6,10 @@
 #include <QJsonObject>
 #include <QObject>
 #include <chrono>
-#include <librealsense2/rs.hpp>
 #include <opencv2/opencv.hpp>
+#include <librealsense2/rs.hpp>
 
 #include "../common/common.h"
-
-class rs2::frameset;
 
 namespace tracking {
 

@@ -196,6 +196,8 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         cv::Rodrigues(rvec, marker_camera_pose(cv::Rect(0, 0, 3, 3)));
         cv::Mat(tvec).copyTo(marker_camera_pose(cv::Rect(3, 0, 1, 3)));
 
+        // TODO beside calculating the marker pose, some offset must be applied to the marker pose to get the drone body pose.
+
         cv::Mat marker_world_pose = cam_params->pose * marker_camera_pose;
 
         // extract rotation and translation from the world pose
