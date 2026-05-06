@@ -31,8 +31,7 @@ struct MarkerParameter {
 struct CameraParameters {
     cv::Mat K;  // Intrinsic matrix
     cv::Mat D;  // Distortion coefficients
-    cv::Mat T;  // Translation vector (extrinsic)
-    cv::Mat R;  // Rotation matrix (extrinsic)
+    cv::Mat pose; // 4x4 transformation matrix from camera frame to world frame (benchmark marker frame)
 
     bool calibrated = false;  // Flag to indicate if the camera has been calibrated
 

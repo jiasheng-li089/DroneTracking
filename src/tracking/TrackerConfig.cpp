@@ -107,7 +107,7 @@ std::vector<CameraParameters> TrackerConfig::get_camera_calibration_parameters()
         if (cam_node.empty() || !cam_node.isMap())
             throw std::runtime_error("Missing or invalid camera configuration for: " + serial);
 
-        cv::Mat K, D, T, R;
+        cv::Mat K, D;
         cam_node["K"] >> K;
         cam_node["D"] >> D;
         // cam_node["T"] >> T;
@@ -117,12 +117,8 @@ std::vector<CameraParameters> TrackerConfig::get_camera_calibration_parameters()
             throw std::runtime_error("Invalid or missing 'K' matrix for camera: " + serial);
         if (D.empty() || D.rows != 1 || D.cols != 5)
             throw std::runtime_error("Invalid or missing 'D' vector for camera: " + serial);
-        // if (T.empty() || T.rows != 3 || T.cols != 1)
-        //     throw std::runtime_error("Invalid or missing 'T' vector for camera: " + serial);
-        // if (R.empty() || R.rows != 3 || R.cols != 3)
-        //     throw std::runtime_error("Invalid or missing 'R' matrix for camera: " + serial);
  
-        result.push_back(CameraParameters{K, D, T, R, false, serial});
+        result.push_back(CameraParameters{K, D, cv::Mat::eye(4, 4, CV_64F), false, serial});
     }
     return std::move(result);
 }
