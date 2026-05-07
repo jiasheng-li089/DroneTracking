@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <chrono>
+#include <mutex>
 #include <opencv2/opencv.hpp>
 #include <librealsense2/rs.hpp>
 
@@ -79,5 +80,8 @@ class VisionTracker : public QObject {
     std::unique_ptr<MarkerParameter> m_benchmark_parameter;
 
     std::map<std::string, cv::Mat> m_cache_frames;
+
+    std::map<std::string, ObjectPose> m_latest_poses;  // latest drone pose estimate per camera
+    std::mutex m_pose_mutex;
 };
 }  // namespace tracking

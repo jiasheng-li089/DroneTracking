@@ -258,7 +258,27 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     ObjectPose averaged_pose{avg_translation[0], avg_translation[1], avg_translation[2], avg_rotation[2],
                              avg_rotation[1], avg_rotation[0], current_timestamp_ms()};
 
-    emit publish_message(averaged_pose.to_json());
+    // store this camera's estimate and compute cross-camera average
+    {
+        std::lock_guard<std::mutex> lock(m_pose_mutex);
+        m_latest_poses[serial] = averaged_pose;
+
+        cv::Vec3d t_sum(0, 0, 0);
+        double roll_sum = 0, pitch_sum = 0, yaw_sum = 0;
+
+        for (const auto& [cam_serial, pose] : m_latest_poses) {
+            t_sum     += cv::Vec3d(pose.x, pose.y, pose.z);
+            roll_sum  += pose.roll;
+            pitch_sum += pose.pitch;
+            yaw_sum   += pose.yaw;
+        }
+
+        double n = static_cast<double>(m_latest_poses.size());
+        cv::Vec3d t_avg = t_sum / n;
+
+        ObjectPose final_pose{t_avg[0], t_avg[1], t_avg[2], roll_sum/n, pitch_sum/n, yaw_sum/n, current_timestamp_ms()};
+        emit publish_message(final_pose.to_json());
+    }
 }
 
 cv::Mat VisionTracker::preprocess_frame(const std::string& serial, const rs2::frameset& frame) {
