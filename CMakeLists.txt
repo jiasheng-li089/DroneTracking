@@ -8,6 +8,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(DEBUG_CHANNEL "Enable debug webrtc data channel" OFF)
 option(ENABLE_DEPTH "Enable the depth stream for tracking" OFF)
+option(SHOW_SINGLE_MARKER_POSE "Show the pose of a single marker for debugging" ON)
+option(ENABLE_STEREO_CALIBRATION "Enable stereo calibration mode" OFF)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -111,6 +113,12 @@ foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
     endif()
     if(ENABLE_DEPTH)
         target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE ENABLE_DEPTH_CAMERA)
+    endif()
+    if (SHOW_SINGLE_MARKER_POSE)
+        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE SHOW_SINGLE_MARKER_POSE)
+    endif()
+    if (ENABLE_STEREO_CALIBRATION)
+        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE ENABLE_STEREO_CALIBRATION)
     endif()
     target_link_libraries("${PROJECT_NAME}_${key}" PRIVATE
             Qt6::Core

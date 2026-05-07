@@ -250,6 +250,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "\nIndividual calibration RMS  cam1=" << rms1 << "  cam2=" << rms2 << "\n";
 
+#ifdef ENABLE_STEREO_CALIBRATION
     // ------------------------------------------------------------------
     // Stereo calibration
     // ------------------------------------------------------------------
@@ -268,6 +269,7 @@ int main(int argc, char* argv[]) {
                   << "Ensure the chessboard pattern dimensions match exactly and that\n"
                   << "images cover the full sensor field of view.\n";
     }
+#endif
 
     // ------------------------------------------------------------------
     // Save results
@@ -288,29 +290,36 @@ int main(int argc, char* argv[]) {
     fs << "valid_pairs" << valid_pairs;
     fs << "rms1" << rms1;
     fs << "rms2" << rms2;
+#ifdef ENABLE_STEREO_CALIBRATION
     fs << "stereo_rms" << stereo_rms;
+#endif
 
     fs << "cameras" << "{";
 
     fs << serial1 << "{";
     fs << "K" << K1;
     fs << "D" << D1;
+#ifdef ENABLE_STEREO_CALIBRATION
     fs << "T" << T;
     fs << "R" << R;
+#endif
     fs << "}";
 
     fs << serial2 << "{";
     fs << "K" << K2;
     fs << "D" << D2;
+#ifdef ENABLE_STEREO_CALIBRATION
     fs << "T" << -R.t() * T;  // cam1 relative to cam2 is inverse of cam2 relative to cam1
     fs << "R" << R.t();       // cam1 relative to cam2 is inverse of cam2 relative to cam1
+#endif
     fs << "}";
 
     fs << "}";
 
+#ifdef ENABLE_STEREO_CALIBRATION
     fs << "E" << E;  // essential matrix
     fs << "F" << F;  // fundamental matrix
-
+#endif
     fs.release();
 
     std::cout << "Calibration results saved to: " << args.output_path << "\n";

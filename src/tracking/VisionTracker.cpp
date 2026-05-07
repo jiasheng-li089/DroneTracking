@@ -6,6 +6,9 @@
 
 #include "TrackerConfig.h"
 
+
+// #define SHOW_SINGLE_MARKER_POSE 1
+
 namespace tracking {
 
 VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config, QObject* parent)
@@ -28,9 +31,24 @@ VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config, QO
 
 VisionTracker::~VisionTracker() = default;
 
+cv::Vec3d get_translation_from_pose(const cv::Mat& pose) {
+    return cv::Vec3d(pose.at<double>(0, 3), pose.at<double>(1, 3), pose.at<double>(2, 3));
+}
+
+cv::Vec3d get_rotation_from_pose_in_degrees(const cv::Mat& pose) {
+    cv::Mat R = pose(cv::Rect(0, 0, 3, 3));
+    cv::Vec3d rvec;
+    cv::Rodrigues(R, rvec);
+
+    double yaw = std::atan2(rvec[1], rvec[0]) * 180.0 / CV_PI;
+    double pitch = std::atan2(-rvec[2], std::hypot(rvec[0], rvec[1])) * 180.0 / CV_PI;
+    double roll = std::atan2(rvec[2], rvec[1]) * 180.0 / CV_PI;
+    return cv::Vec3d(roll, pitch, yaw);
+}
+
 bool VisionTracker::calibrate_camera(CameraParameters& cam_params, std::vector<int>& marker_ids,
                                      std::vector<std::vector<cv::Point2f>>& marker_corners) {
-    // TODO implement the camera calibration logic using the benchmark marker
+    // implement the camera calibration logic using the benchmark marker
 
     std::vector<cv::Point2f> benchmark_corners;
 
@@ -53,22 +71,16 @@ bool VisionTracker::calibrate_camera(CameraParameters& cam_params, std::vector<i
     cam_params.pose = R_benchmark_cam_pose.inv();  // Invert to get camera pose in benchmark marker frame
 
     // extract rotation and translation from the camera pose
-    cv::Mat R = cam_params.pose(cv::Rect(0, 0, 3, 3));
-    cv::Mat t = cam_params.pose(cv::Rect(3, 0, 1, 3));
+    cv::Vec3d t = get_translation_from_pose(cam_params.pose);
+    cv::Vec3d r = get_rotation_from_pose_in_degrees(cam_params.pose);
 
-    // ZYX Euler angles (yaw-pitch-roll) in degrees from rotation matrix elements
-    double yaw   = std::atan2(R.at<double>(1, 0), R.at<double>(0, 0)) * 180.0 / CV_PI;
-    double pitch = std::atan2(-R.at<double>(2, 0), std::hypot(R.at<double>(2, 1), R.at<double>(2, 2))) * 180.0 / CV_PI;
-    double roll  = std::atan2(R.at<double>(2, 1), R.at<double>(2, 2)) * 180.0 / CV_PI;
-
-    spdlog::info("Camera {} orientation in world (deg): yaw = {:.4f} pitch = {:.4f} roll = {:.4f}", cam_params.serial, yaw,
-                 pitch, roll);
+    spdlog::info("Camera {} orientation in world (deg): yaw = {:.4f} pitch = {:.4f} roll = {:.4f}", cam_params.serial,
+                 r[2], r[1], r[0]);
 
     emit update_camera_status(fmt::format("Camera #{}", cam_params.serial),
                               fmt::format("Calibrated: x = {:.4f}, y = {:.4f}, z = {:.4f}, "
                                           "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
-                                          t.at<double>(0), t.at<double>(1),
-                                          t.at<double>(2), yaw, pitch, roll));
+                                          t[0], t[1], t[2], r[2], r[1], r[0]));
 
     spdlog::info("Camera {} calibrated from benchmark marker {}", cam_params.serial, m_benchmark_parameter->id);
     return true;
@@ -136,7 +148,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         }
     }
     if (known_marker_corners.empty()) {
-        // TODO notify the GUI that current tracking status is "Lost"
+        // notify the GUI that current tracking status is "Lost"
         if (log_enable) spdlog::debug("No known markers detected from cameraId ({}), skipping pose estimation", serial);
         return;
     }
@@ -183,8 +195,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
                 QImage::Format_RGB888);
     emit frames_received(std::vector<std::tuple<int, std::string, QImage>>{{camera_id + 200, serial, qimg.copy()}});
 
-    std::vector<cv::Mat> world_R_matrices;
-    std::vector<cv::Vec3d> world_tvecs;
+    std::vector<cv::Mat> drone_world_poses;
 
     // transform each marker pose from camera frame to world (benchmark marker) frame
     // cam_params->R and cam_params->T are calibrated per-camera, so apply once for all cameras
@@ -196,35 +207,27 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         cv::Rodrigues(rvec, marker_camera_pose(cv::Rect(0, 0, 3, 3)));
         cv::Mat(tvec).copyTo(marker_camera_pose(cv::Rect(3, 0, 1, 3)));
 
-        // TODO beside calculating the marker pose, some offset must be applied to the marker pose to get the drone body pose.
+        auto drone_marker_pose = known_marker_parameters[i].drone_marker_pose;
 
-        cv::Mat marker_world_pose = cam_params->pose * marker_camera_pose;
+        // beside calculating the marker pose, some offset must be applied to the marker pose to get the drone body
+        // pose.
+        cv::Mat drone_world_pose = cam_params->pose * (marker_camera_pose * drone_marker_pose);
 
+        drone_world_poses.push_back(drone_world_pose);
+
+#ifdef SHOW_SINGLE_MARKER_POSE
         // extract rotation and translation from the world pose
-        cv::Mat R_marker_world = marker_world_pose(cv::Rect(0, 0, 3, 3));
-        cv::Vec3d tvec_world = marker_world_pose(cv::Rect(3, 0, 1, 3));
+        cv::Vec3d t = get_translation_from_pose(drone_world_pose);
+        cv::Vec3d r = get_rotation_from_pose_in_degrees(drone_world_pose);
 
-        // ZYX Euler angles (yaw-pitch-roll) in degrees
-        double yaw = std::atan2(R_marker_world.at<double>(1, 0), R_marker_world.at<double>(0, 0)) * 180.0 / CV_PI;
-        double pitch = std::atan2(-R_marker_world.at<double>(2, 0),
-                                  std::hypot(R_marker_world.at<double>(2, 1), R_marker_world.at<double>(2, 2))) *
-                       180.0 / CV_PI;
-        double roll = std::atan2(R_marker_world.at<double>(2, 1), R_marker_world.at<double>(2, 2)) * 180.0 / CV_PI;
-
-        if (known_marker_ids[i] != m_benchmark_parameter->id) {
-            world_R_matrices.push_back(R_marker_world.clone());
-            world_tvecs.push_back(tvec_world);
-        }
-
-        ObjectPose pose{tvec_world[0], tvec_world[1], tvec_world[2], roll, pitch, yaw, current_timestamp_ms()};
+        ObjectPose pose{t[0], t[1], t[2], r[2], r[1], r[0], current_timestamp_ms()};
         emit update_camera_status(fmt::format("Marker #{}_{}", serial, known_marker_ids[i]),
                                   fmt::format("x = {:.4f}, y = {:.4f}, z = {:.4f}, "
                                               "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
                                               pose.x, pose.y, pose.z, pose.yaw, pose.pitch, pose.roll));
 
         if (log_enable) {
-            double distance = std::sqrt(tvec_world[0] * tvec_world[0] + tvec_world[1] * tvec_world[1] +
-                                        tvec_world[2] * tvec_world[2]);
+            double distance = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
             spdlog::info(
                 "Marker ID: {}, camera: {}, pos (m): [{:.4f}, {:.4f}, {:.4f}], "
                 "dist: {:.3f} m, rot (deg) yaw = {:.4f} pitch = {:.4f} roll = {:.4f}",
@@ -240,49 +243,22 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
             }
 #endif
         }
+#endif
     }
 
-    // // Average marker poses to compute drone body pose.
-    // // Position: arithmetic mean of all world tvecs.
-    // // Rotation: undo each marker's known body-relative angle (around Z), sum the resulting
-    // //           rotation matrices, then re-orthogonalize via SVD (geodesic mean on SO(3)).
-    // cv::Vec3d t_drone_sum(0, 0, 0);
-    // cv::Mat R_drone_sum = cv::Mat::zeros(3, 3, CV_64F);
+    cv::Vec3d avg_translation(0, 0, 0);
+    cv::Vec3d avg_rotation(0, 0, 0);
+    for (const auto& pose : drone_world_poses) {
+        avg_translation += get_translation_from_pose(pose);
+        avg_rotation += get_rotation_from_pose_in_degrees(pose);
+    }
+    avg_translation /= static_cast<int>(drone_world_poses.size());
+    avg_rotation /= static_cast<int>(drone_world_poses.size());
 
-    // for (size_t i = 0; i < world_R_matrices.size(); ++i) {
-    //     t_drone_sum += world_tvecs[i];
+    ObjectPose averaged_pose{avg_translation[0], avg_translation[1], avg_translation[2], avg_rotation[2],
+                             avg_rotation[1], avg_rotation[0], current_timestamp_ms()};
 
-    //     // undo the marker's angular offset relative to drone body (rotation around Z)
-    //     double angle_rad = -known_marker_parameters[i].angle * CV_PI / 180.0;
-    //     double c = std::cos(angle_rad), s = std::sin(angle_rad);
-    //     cv::Mat Rz = (cv::Mat_<double>(3, 3) << c, -s, 0, s, c, 0, 0, 0, 1);
-    //     R_drone_sum += world_R_matrices[i] * Rz;
-    // }
-
-    // double n = static_cast<double>(world_R_matrices.size());
-    // cv::Vec3d t_drone_avg = t_drone_sum / n;
-
-    // // re-orthogonalize the summed rotation matrix to the nearest proper rotation
-    // cv::Mat U, S, Vt;
-    // cv::SVD::compute(R_drone_sum, S, U, Vt);
-    // cv::Mat R_drone_avg = U * Vt;
-    // if (cv::determinant(R_drone_avg) < 0) R_drone_avg = -R_drone_avg;
-
-    // double avg_yaw   = std::atan2(R_drone_avg.at<double>(1, 0), R_drone_avg.at<double>(0, 0)) * 180.0 / CV_PI;
-    // double avg_pitch = std::atan2(-R_drone_avg.at<double>(2, 0),
-    //                                std::hypot(R_drone_avg.at<double>(2, 1), R_drone_avg.at<double>(2, 2))) * 180.0 / CV_PI;
-    // double avg_roll  = std::atan2(R_drone_avg.at<double>(2, 1), R_drone_avg.at<double>(2, 2)) * 180.0 / CV_PI;
-
-    // ObjectPose averaged_pose{t_drone_avg[0], t_drone_avg[1], t_drone_avg[2], avg_roll, avg_pitch, avg_yaw, current_timestamp_ms()};
-    // emit update_camera_status(fmt::format("Drone Pose #{}", serial), fmt::format("x={:.4f}, y={:.4f}, z={:.4f}, yaw={:.4f}, pitch={:.4f}, roll={:.4f}",
-    //                               averaged_pose.x, averaged_pose.y, averaged_pose.z,
-    //                               averaged_pose.yaw, averaged_pose.pitch, averaged_pose.roll));
-
-    // // TODO, beside average multiple markers' poses to get the drone's pose, 
-    // // the calculated drone pose based on multiple cameras should also be considered to get a more robust estimation.
-
-    // // publish the stabilized drone pose to the network
-    // emit publish_message(averaged_pose.to_json());
+    emit publish_message(averaged_pose.to_json());
 }
 
 cv::Mat VisionTracker::preprocess_frame(const std::string& serial, const rs2::frameset& frame) {

@@ -16,13 +16,8 @@ struct MarkerParameter {
 
     cv::Mat obj_points;
 
-    static MarkerParameter create(int id, double angle, float size, cv::Vec3d t = cv::Vec3d(0, 0, 0)) {
-        cv::Mat drone_marker_pose = cv::Mat::eye(4, 4, CV_64F);
+    static MarkerParameter create(int id, double angle, float size, cv::Mat drone_marker_pose = cv::Mat::eye(4, 4, CV_64F)) {
         auto result = MarkerParameter{id, angle, size, drone_marker_pose, cv::Mat(4, 1, CV_32FC3)};
-        cv::Vec3d r {0, 0, 0};
-        cv::Mat(t).copyTo(result.drone_marker_pose(cv::Rect(3, 0, 1, 3)));
-        cv::Rodrigues(r, result.drone_marker_pose(cv::Rect(0, 0, 3, 3)));
-
 
         float half_size = size / 2.0f;
         result.obj_points.at<cv::Vec3f>(0, 0) = cv::Vec3f(-half_size, half_size, 0);   // Top-left

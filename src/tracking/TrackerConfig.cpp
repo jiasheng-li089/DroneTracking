@@ -27,7 +27,33 @@ std::map<int, MarkerParameter> TrackerConfig::get_marker_parameters() const {
         if (auto offset_node = entry["drone_pose_offset"]; !offset_node.empty()) {
             offset_node >> drone_pose_offset;
         }
-        marker_parameters[id] = MarkerParameter::create(id, angle, size, drone_pose_offset);
+        cv::Vec3d rotation_deg(0, 0, 0);
+        if (auto rotation_node = entry["drone_rotation"]; !rotation_node.empty()) {
+            rotation_node >> rotation_deg;
+        }
+
+        // Convert Euler angles (degrees, ZYX convention) → rotation matrix → Rodrigues vector
+        double roll_rad  = rotation_deg[0] * CV_PI / 180.0;
+        double pitch_rad = rotation_deg[1] * CV_PI / 180.0;
+        double yaw_rad   = rotation_deg[2] * CV_PI / 180.0;
+        cv::Mat Rx = (cv::Mat_<double>(3, 3) <<
+            1, 0,              0,
+            0, cos(roll_rad),  -sin(roll_rad),
+            0, sin(roll_rad),   cos(roll_rad));
+        cv::Mat Ry = (cv::Mat_<double>(3, 3) <<
+             cos(pitch_rad), 0, sin(pitch_rad),
+             0,              1, 0,
+            -sin(pitch_rad), 0, cos(pitch_rad));
+        cv::Mat Rz = (cv::Mat_<double>(3, 3) <<
+            cos(yaw_rad), -sin(yaw_rad), 0,
+            sin(yaw_rad),  cos(yaw_rad), 0,
+            0,             0,            1);
+
+        cv::Mat drone_marker_pose = cv::Mat::eye(4, 4, CV_64F);
+        cv::Mat(Rx * Ry * Rz).copyTo(drone_marker_pose(cv::Rect(0, 0, 3, 3)));
+        cv::Mat(drone_pose_offset).copyTo(drone_marker_pose(cv::Rect(3, 0, 1, 3)));
+
+        marker_parameters[id] = MarkerParameter::create(id, angle, size, drone_marker_pose);
     }
 
     return std::move(marker_parameters);
