@@ -1,0 +1,86 @@
+%YAML:1.0
+---
+camera1_serial: f1231477
+camera2_serial: f1271805
+image_width: 1920
+image_height: 1080
+pattern_cols: 6
+pattern_rows: 9
+square_size_mm: 39.799999999999997
+valid_pairs: 44
+rms1: 0.65927470293850476
+rms2: 0.34210694685482151
+cameras:
+   f1231477:
+      K: !!opencv-matrix
+         rows: 3
+         cols: 3
+         dt: d
+         data: [ 1386.5081136754034, 0., 950.27098117053686, 0.,
+             1384.1492070428239, 515.2486925938714, 0., 0., 1. ]
+      D: !!opencv-matrix
+         rows: 1
+         cols: 5
+         dt: d
+         data: [ 0.090029909516917458, -0.19627131535976675,
+             0.0033004251426521874, -0.0055870258913452838, 0. ]
+   f1271805:
+      K: !!opencv-matrix
+         rows: 3
+         cols: 3
+         dt: d
+         data: [ 1349.5858524117307, 0., 993.38905740720327, 0.,
+             1346.2538411618364, 549.28251876437287, 0., 0., 1. ]
+      D: !!opencv-matrix
+         rows: 1
+         cols: 5
+         dt: d
+         data: [ 0.024535862553097497, -0.048082177531255876,
+             0.0024758138597082003, 0.0050887276618496614, 0. ]
+
+marker:
+   - id: 15
+     angle: 0.0
+     size: 0.08
+     drone_position_offset: [0.0, -0.1, -0.03] 
+     drone_position_offset_note: "drone's position relative to the marker"
+     drone_rotation: [0.0, 0.0, 0.0] 
+     drone_rotation_note: "drone's rotation relative to the marker, in Euler angles (x, y, z)"
+   - id: 301
+     angle: 120.0
+     size: 0.08
+     drone_position_offset: [0.0, -0.1, -0.03]
+     drone_rotation: [0.0, 120.0, 0.0]
+   - id: 348
+     angle: 240.0
+     size: 0.08
+     drone_position_offset: [0.0, -0.1, -0.03]
+     drone_rotation: [0.0, 240.0, 0.0]
+
+benchmark:
+   id: 11
+   angle: 0.0
+   size: 0.08
+detector:
+   dictionary: "DICT_ARUCO_ORIGINAL"
+   parameters:
+      adaptiveThreshWinSizeMin: 3
+      adaptiveThreshWinSizeMax: 23
+      adaptiveThreshWinSizeStep: 10
+      adaptiveThreshConstant: 7
+      minMarkerPerimeterRate: 0.03
+      maxMarkerPerimeterRate: 4.0
+      polygonalApproxAccuracyRate: 0.03
+      minCornerDistanceRate: 0.05
+      minDistanceToBorder: 3
+      minMarkerDistanceRate: 0.05
+      cornerRefinementMethod: "CORNER_REFINE_SUBPIX"
+      cornerRefinementWinSize: 5
+      cornerRefinementMaxIterations: 30
+      cornerRefinementMinAccuracy: 0.1
+      errorCorrectionRate: 0.6
+      maxErroneousBitsInBorderRate: 0.35
+      minOtsuStdDev: 5.0
+      perspectiveRemovePixelPerCell: 4
+      perspectiveRemoveIgnoredMarginPerCell: 0.0
+      maxPerspectiveRemovePixelPerCell: 4

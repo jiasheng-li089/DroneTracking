@@ -13,8 +13,8 @@ int main(int argc, char *argv[]) {
     QApplication a(argc, argv);
 
     QDir configDir = QDir::current();
-    configDir.cd("captured_photos");
-    auto config_file_path = configDir.absoluteFilePath("camera_calibration.yaml");
+    configDir.cdUp();
+    auto config_file_path = configDir.absoluteFilePath("camera_calibration_0507120400.yaml");
     spdlog::info("Config file path: {}", config_file_path.toStdString());
     DroneTrackingWindow window (config_file_path.toStdString());
 
