@@ -60,7 +60,8 @@ bool VisionTracker::calibrate_camera(CameraParameters& cam_params, std::vector<i
     benchmark_corners = marker_corners[std::distance(marker_ids.begin(), it)];
 
     cv::Vec3d rvec, tvec;
-    cv::solvePnP(m_benchmark_parameter->obj_points, benchmark_corners, cam_params.K, cam_params.D, rvec, tvec);
+    cv::solvePnP(m_benchmark_parameter->obj_points, benchmark_corners, cam_params.K, cam_params.D, rvec, tvec,
+                 false, cv::SOLVEPNP_IPPE_SQUARE);
 
     // The pose of the benchmark marker relative to the camera
     cv::Mat R_benchmark_cam_pose = cv::Mat::eye(4, 4, CV_64F);
@@ -179,7 +180,8 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         const auto& marker_corner = known_marker_corners[i];
 
         // solvePnP to get the relative position of the target (aruco) to the camera
-        cv::solvePnP(marker_param.obj_points, marker_corner, cam_params->K, cam_params->D, rvecs.at(i), tvecs.at(i));
+        cv::solvePnP(marker_param.obj_points, marker_corner, cam_params->K, cam_params->D, rvecs.at(i), tvecs.at(i), 
+                     false, cv::SOLVEPNP_IPPE_SQUARE);
     }
 
     if (log_enable)
