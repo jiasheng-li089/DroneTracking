@@ -6,7 +6,6 @@
 
 #include "TrackerConfig.h"
 
-
 // #define SHOW_SINGLE_MARKER_POSE 1
 
 namespace tracking {
@@ -87,16 +86,32 @@ bool VisionTracker::calibrate_camera(CameraParameters& cam_params, std::vector<i
 }
 
 void VisionTracker::process_frames(const int camera_id, const std::string& serial, const rs2::frameset& frames) {
+    auto now = std::chrono::steady_clock::now();
+    auto& last = m_last_frame_times[serial];
+    double fps = 0.0;
+    if (last != std::chrono::steady_clock::time_point{}) {
+        double dt = std::chrono::duration<double>(now - last).count();
+        fps = (dt > 0.0) ? 1.0 / dt : 0.0;
+    }
+    last = now;
+
     auto log_enable = frames.get_frame_number() % 30 == 0;
+
+    if (log_enable)
+        spdlog::debug("Received frames from cameraId ({}), frame number: {}, fps: {:.2f}", serial,
+                      frames.get_frame_number(), fps);
 
     // check if the camera has detected the benchmark marker and calculate its position and orientation in the world
     // frame yet, if not, calibrate it first
     CameraParameters* cam_params = nullptr;
 
-    for (auto& param : m_camera_parameters) {
-        if (param.serial == serial) {
-            cam_params = &param;
-            break;
+    {
+        std::lock_guard<std::mutex> lock(m_pose_mutex);
+        for (auto& param : m_camera_parameters) {
+            if (param.serial == serial) {
+                cam_params = &param;
+                break;
+            }
         }
     }
 
@@ -255,8 +270,8 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     avg_translation /= static_cast<int>(drone_world_poses.size());
     avg_rotation /= static_cast<int>(drone_world_poses.size());
 
-    ObjectPose averaged_pose{avg_translation[0], avg_translation[1], avg_translation[2], avg_rotation[2],
-                             avg_rotation[1], avg_rotation[0], current_timestamp_ms()};
+    ObjectPose averaged_pose{avg_translation[0], avg_translation[1], avg_translation[2],    avg_rotation[2],
+                             avg_rotation[1],    avg_rotation[0],    current_timestamp_ms()};
 
     // store this camera's estimate and compute cross-camera average
     {
@@ -267,16 +282,17 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         double roll_sum = 0, pitch_sum = 0, yaw_sum = 0;
 
         for (const auto& [cam_serial, pose] : m_latest_poses) {
-            t_sum     += cv::Vec3d(pose.x, pose.y, pose.z);
-            roll_sum  += pose.roll;
+            t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
+            roll_sum += pose.roll;
             pitch_sum += pose.pitch;
-            yaw_sum   += pose.yaw;
+            yaw_sum += pose.yaw;
         }
 
         double n = static_cast<double>(m_latest_poses.size());
         cv::Vec3d t_avg = t_sum / n;
 
-        ObjectPose final_pose{t_avg[0], t_avg[1], t_avg[2], roll_sum/n, pitch_sum/n, yaw_sum/n, current_timestamp_ms()};
+        ObjectPose final_pose{
+            t_avg[0], t_avg[1], t_avg[2], roll_sum / n, pitch_sum / n, yaw_sum / n, current_timestamp_ms()};
         emit publish_message(final_pose.to_json());
     }
 }

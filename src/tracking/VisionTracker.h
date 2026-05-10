@@ -80,6 +80,7 @@ class VisionTracker : public QObject {
     std::unique_ptr<MarkerParameter> m_benchmark_parameter;
 
     std::map<std::string, cv::Mat> m_cache_frames;
+    std::map<std::string, std::chrono::steady_clock::time_point> m_last_frame_times;
 
     std::map<std::string, ObjectPose> m_latest_poses;  // latest drone pose estimate per camera
     std::mutex m_pose_mutex;
