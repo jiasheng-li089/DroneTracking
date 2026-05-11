@@ -160,10 +160,31 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     for (size_t i = 0; i < size; ++i) {
         const auto& marker_param = known_marker_parameters[i];
         const auto& marker_corner = known_marker_corners[i];
+#define USE_GENERIC_SOLVE_PNP 1
+#ifdef USE_GENERIC_SOLVE_PNP
+        std::vector<cv::Mat> rvecs_out, tvecs_out;
+        std::vector<double> reproj_errors;
+        cv::solvePnPGeneric(marker_param.obj_points, marker_corner, cam_params->K, cam_params->D, rvecs_out, tvecs_out,
+                         false, cv::SOLVEPNP_IPPE_SQUARE, cv::noArray(), cv::noArray(), reproj_errors);
+        
+        // figure out the best solution based on the reprojection error, and use it for the following processing.
+        auto min_it = std::min_element(reproj_errors.begin(), reproj_errors.end());
+        int best_index = std::distance(reproj_errors.begin(), min_it);
+        rvecs.at(i) = rvecs_out.at(best_index);
+        tvecs.at(i) = tvecs_out.at(best_index);
 
+        if (log_enable) {
+            spdlog::debug(
+                "Marker ID: {}, reprojection errors for different solutions: [{}], selected solution index: {}, "
+                "rvec: [{:.2f}, {:.2f}, {:.2f}], tvec: [{:.2f}, {:.2f}, {:.2f}]",
+                known_marker_ids[i], fmt::join(reproj_errors, ", "), best_index, rvecs.at(i)[0], rvecs.at(i)[1],
+                rvecs.at(i)[2], tvecs.at(i)[0], tvecs.at(i)[1], tvecs.at(i)[2]);
+        }
+#else
         // solvePnP to get the relative position of the target (aruco) to the camera
         cv::solvePnP(marker_param.obj_points, marker_corner, cam_params->K, cam_params->D, rvecs.at(i), tvecs.at(i),
                      false, cv::SOLVEPNP_IPPE_SQUARE);
+#endif
     }
 
     // only start tracking when the camera position is known.
@@ -180,10 +201,14 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         spdlog::debug("Pose estimation completed for cameraId ({}), marker IDs: [{}]", serial,
                       fmt::join(known_marker_ids, ", "));
     for (size_t i = 0; i < size; i++) {
+        cv::Mat marker_camera_pose = cv::Mat::eye(4, 4, CV_64F);
+        cv::Rodrigues(rvecs[i], marker_camera_pose(cv::Rect(0, 0, 3, 3)));
+        cv::Mat(tvecs[i]).copyTo(marker_camera_pose(cv::Rect(3, 0, 1, 3)));
+        auto position = get_translation_from_pose(marker_camera_pose);
+        auto rotation = get_rotation_from_pose_in_degrees(marker_camera_pose);
         if (log_enable)
-            spdlog::debug("Marker ID: {}, rvec: [{:.2f}, {:.2f}, {:.2f}], tvec: [{:.2f}, {:.2f}, {:.2f}]",
-                          known_marker_ids[i], rvecs[i][0], rvecs[i][1], rvecs[i][2], tvecs[i][0], tvecs[i][1],
-                          tvecs[i][2]);
+            spdlog::debug("THIS ONE: Marker ID: {}, rvec: [{:.2f}, {:.2f}, {:.2f}], tvec: [{:.2f}, {:.2f}, {:.2f}]",
+                          known_marker_ids[i], rotation[0], rotation[1], rotation[2], position[0], position[1], position[2]);
     }
 
     std::vector<cv::Point2f> all_centers_2d(size);
@@ -209,6 +234,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     // transform each marker pose from camera frame to world (benchmark marker) frame
     // cam_params->R and cam_params->T are calibrated per-camera, so apply once for all cameras
     for (size_t i = 0; i < size; ++i) {
+
         cv::Vec3d rvec = rvecs.at(i);
         cv::Vec3d tvec = tvecs.at(i);
 
@@ -220,9 +246,11 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
 
         // beside calculating the marker pose, some offset must be applied to the marker pose to get the drone body
         // pose.
-        cv::Mat drone_world_pose = cam_params->pose * (marker_camera_pose * drone_marker_pose);
+        cv::Mat drone_world_pose = marker_camera_pose * cam_params->pose; // * drone_marker_pose);
 
-        drone_world_poses.push_back(drone_world_pose);
+        if (known_marker_ids[i] != m_benchmark_parameter->id) {
+            drone_world_poses.push_back(drone_world_pose);
+        }
 
 #ifdef SHOW_SINGLE_MARKER_POSE
         // extract rotation and translation from the world pose
