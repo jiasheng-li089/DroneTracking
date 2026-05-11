@@ -5,7 +5,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
-#include <chrono>
 #include <librealsense2/rs.hpp>
 #include <mutex>
 #include <unordered_map>
@@ -33,6 +32,10 @@ struct ObjectPose {
         QJsonObject ori = root["orientation"].toObject();
         return ObjectPose{pos["x"].toDouble(),     pos["y"].toDouble(),   pos["z"].toDouble(),   ori["roll"].toDouble(),
                           ori["pitch"].toDouble(), ori["yaw"].toDouble(), current_timestamp_ms()};
+    }
+
+    static ObjectPose from_t_and_r(const cv::Vec3d& t, const cv::Vec3d& r) {
+        return ObjectPose{t[0], t[1], t[2], r[0], r[1], r[2], current_timestamp_ms()};
     }
 };
 

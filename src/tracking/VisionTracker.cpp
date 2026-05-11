@@ -1,5 +1,6 @@
 #include "VisionTracker.h"
 
+#include <opencv2/core/matx.hpp>
 #include <spdlog/spdlog.h>
 
 #include <QImage>
@@ -38,6 +39,9 @@ cv::Vec3d get_translation_from_pose(const cv::Mat& pose) {
     return cv::Vec3d(pose.at<double>(0, 3), pose.at<double>(1, 3), pose.at<double>(2, 3));
 }
 
+/**
+ * return the rotation from the pose in degrees (roll, pitch, yaw)
+ */
 cv::Vec3d get_rotation_from_pose_in_degrees(const cv::Mat& pose) {
     cv::Mat R = pose(cv::Rect(0, 0, 3, 3));
     cv::Vec3d rvec;
@@ -263,7 +267,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         cv::Vec3d t = get_translation_from_pose(drone_world_pose);
         cv::Vec3d r = get_rotation_from_pose_in_degrees(drone_world_pose);
 
-        ObjectPose pose{t[0], t[1], t[2], r[2], r[1], r[0], current_timestamp_ms()};
+        ObjectPose pose = ObjectPose::from_t_and_r(t, r);
         emit update_camera_status(fmt::format("Marker #{}_{}", serial, known_marker_ids[i]),
                                   fmt::format("x = {:.4f}, y = {:.4f}, z = {:.4f}, "
                                               "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
@@ -298,8 +302,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     avg_translation /= static_cast<int>(drone_world_poses.size());
     avg_rotation /= static_cast<int>(drone_world_poses.size());
 
-    ObjectPose averaged_pose{avg_translation[0], avg_translation[1], avg_translation[2],    avg_rotation[2],
-                             avg_rotation[1],    avg_rotation[0],    current_timestamp_ms()};
+    ObjectPose averaged_pose = ObjectPose::from_t_and_r(avg_translation, avg_rotation);
 
     // store this camera's estimate and compute cross-camera average
     {
@@ -307,20 +310,19 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         m_latest_poses[serial] = averaged_pose;
 
         cv::Vec3d t_sum(0, 0, 0);
+        cv::Vec3d r_sum(0, 0, 0);
         double roll_sum = 0, pitch_sum = 0, yaw_sum = 0;
 
         for (const auto& [cam_serial, pose] : m_latest_poses) {
             t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
-            roll_sum += pose.roll;
-            pitch_sum += pose.pitch;
-            yaw_sum += pose.yaw;
+            r_sum += cv::Vec3d(pose.roll, pose.pitch, pose.yaw);
         }
 
         double n = static_cast<double>(m_latest_poses.size());
         cv::Vec3d t_avg = t_sum / n;
+        cv::Vec3d r_avg = r_sum / n;
 
-        ObjectPose final_pose{
-            t_avg[0], t_avg[1], t_avg[2], roll_sum / n, pitch_sum / n, yaw_sum / n, current_timestamp_ms()};
+        ObjectPose final_pose = ObjectPose::from_t_and_r(t_avg, r_avg);
         emit publish_message(final_pose.to_json());
     }
 }
