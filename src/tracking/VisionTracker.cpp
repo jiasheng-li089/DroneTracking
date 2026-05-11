@@ -46,22 +46,18 @@ cv::Vec3d get_rotation_from_pose_in_degrees(const cv::Mat& pose) {
 }
 
 bool VisionTracker::calibrate_camera(CameraParameters& cam_params, std::vector<int>& marker_ids,
-                                     std::vector<std::vector<cv::Point2f>>& marker_corners) {
+                                     std::vector<cv::Vec3d>& rvecs, std::vector<cv::Vec3d>& tvecs) {
     // implement the camera calibration logic using the benchmark marker
-
-    std::vector<cv::Point2f> benchmark_corners;
-
     auto it = std::find(marker_ids.begin(), marker_ids.end(), m_benchmark_parameter->id);
     if (it == marker_ids.end()) {
         spdlog::debug("Benchmark marker with ID {} not detected, cannot calibrate camera with serial: {}",
                       m_benchmark_parameter->id, cam_params.serial);
         return false;
     }
-    benchmark_corners = marker_corners[std::distance(marker_ids.begin(), it)];
+    auto index = std::distance(marker_ids.begin(), it);
 
-    cv::Vec3d rvec, tvec;
-    cv::solvePnP(m_benchmark_parameter->obj_points, benchmark_corners, cam_params.K, cam_params.D, rvec, tvec,
-                 false, cv::SOLVEPNP_IPPE_SQUARE);
+    auto rvec = rvecs[index];
+    auto tvec = tvecs[index];
 
     // The pose of the benchmark marker relative to the camera
     cv::Mat R_benchmark_cam_pose = cv::Mat::eye(4, 4, CV_64F);
@@ -105,7 +101,6 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     // check if the camera has detected the benchmark marker and calculate its position and orientation in the world
     // frame yet, if not, calibrate it first
     CameraParameters* cam_params = nullptr;
-
     {
         std::lock_guard<std::mutex> lock(m_pose_mutex);
         for (auto& param : m_camera_parameters) {
@@ -128,17 +123,6 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     std::vector<std::vector<cv::Point2f>> marker_corners, rejected_candidates;
 
     m_aruco_detector.detectMarkers(rgb_frame, marker_corners, marker_ids, rejected_candidates);
-
-    if (!cam_params->calibrated) {
-        emit update_camera_status(fmt::format("Camera #{}", cam_params->serial), "Calibrating");
-
-        if (!calibrate_camera(*cam_params, marker_ids, marker_corners)) {
-            return;
-        }
-        cam_params->calibrated = true;
-    }
-
-    // only start tracking when the camera position is known.
 
     if (log_enable)
         spdlog::debug("detected {} markers from cameraId ({}): [{}]", marker_corners.size(), serial,
@@ -168,6 +152,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         if (log_enable) spdlog::debug("No known markers detected from cameraId ({}), skipping pose estimation", serial);
         return;
     }
+
     auto size = known_marker_corners.size();
     if (log_enable)
         spdlog::debug("Processing {} known markers from cameraId ({}), IDs: [{}]", size, serial,
@@ -180,8 +165,18 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         const auto& marker_corner = known_marker_corners[i];
 
         // solvePnP to get the relative position of the target (aruco) to the camera
-        cv::solvePnP(marker_param.obj_points, marker_corner, cam_params->K, cam_params->D, rvecs.at(i), tvecs.at(i), 
+        cv::solvePnP(marker_param.obj_points, marker_corner, cam_params->K, cam_params->D, rvecs.at(i), tvecs.at(i),
                      false, cv::SOLVEPNP_IPPE_SQUARE);
+    }
+
+    // only start tracking when the camera position is known.
+    if (!cam_params->calibrated) {
+        emit update_camera_status(fmt::format("Camera #{}", cam_params->serial), "Calibrating");
+
+        if (!calibrate_camera(*cam_params, marker_ids, rvecs, tvecs)) {
+            return;
+        }
+        cam_params->calibrated = true;
     }
 
     if (log_enable)

@@ -56,6 +56,11 @@ marker:
      size: 0.08
      drone_position_offset: [0.0, -0.1, -0.03]
      drone_rotation: [0.0, 240.0, 0.0]
+   - id: 11
+     angle: 0.0
+     size: 0.08
+     drone_position_offset: [0.0, 0.0, 0.0]
+     drone_rotation: [0.0, 0.0, 0.0]
 
 benchmark:
    id: 11

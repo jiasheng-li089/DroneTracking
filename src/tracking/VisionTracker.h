@@ -6,9 +6,9 @@
 #include <QJsonObject>
 #include <QObject>
 #include <chrono>
+#include <librealsense2/rs.hpp>
 #include <mutex>
 #include <opencv2/opencv.hpp>
-#include <librealsense2/rs.hpp>
 
 #include "../common/common.h"
 
@@ -30,15 +30,8 @@ struct ObjectPose {
         QJsonObject root = QJsonDocument::fromJson(QByteArray::fromStdString(json_str)).object();
         QJsonObject pos = root["position"].toObject();
         QJsonObject ori = root["orientation"].toObject();
-        return ObjectPose{
-            pos["x"].toDouble(),
-            pos["y"].toDouble(),
-            pos["z"].toDouble(),
-            ori["roll"].toDouble(),
-            ori["pitch"].toDouble(),
-            ori["yaw"].toDouble(),
-            current_timestamp_ms()
-        };
+        return ObjectPose{pos["x"].toDouble(),     pos["y"].toDouble(),   pos["z"].toDouble(),   ori["roll"].toDouble(),
+                          ori["pitch"].toDouble(), ori["yaw"].toDouble(), current_timestamp_ms()};
     }
 };
 
@@ -66,8 +59,8 @@ class VisionTracker : public QObject {
    private:
     cv::Mat preprocess_frame(const std::string& serial, const rs2::frameset& frame);
 
-    bool calibrate_camera(CameraParameters& cam_params, std::vector<int>& marker_ids,
-                          std::vector<std::vector<cv::Point2f>>& marker_corners);
+    bool calibrate_camera(CameraParameters& cam_params, std::vector<int>& marker_ids, std::vector<cv::Vec3d>& rvecs,
+                          std::vector<cv::Vec3d>& tvecs);
 
     std::map<int, MarkerParameter> m_marker_parameters;
 
