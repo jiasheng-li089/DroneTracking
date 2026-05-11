@@ -101,13 +101,10 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     // check if the camera has detected the benchmark marker and calculate its position and orientation in the world
     // frame yet, if not, calibrate it first
     CameraParameters* cam_params = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(m_pose_mutex);
-        for (auto& param : m_camera_parameters) {
-            if (param.serial == serial) {
-                cam_params = &param;
-                break;
-            }
+    for (auto& param : m_camera_parameters) {
+        if (param.serial == serial) {
+            cam_params = &param;
+            break;
         }
     }
 
