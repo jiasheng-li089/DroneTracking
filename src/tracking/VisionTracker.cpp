@@ -19,7 +19,11 @@ VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config, QO
         auto dictionary = m_config->get_aruco_dictionary();
 
         m_aruco_detector = cv::aruco::ArucoDetector(dictionary, detector_params);
-        m_camera_parameters = m_config->get_camera_calibration_parameters();
+
+        auto cam_params_vec = m_config->get_camera_calibration_parameters();
+        for (const auto& param : cam_params_vec) {
+            m_camera_parameters[param.serial] = param;
+        }
 
         m_benchmark_parameter = std::make_unique<MarkerParameter>(m_config->get_benchmark_parameter());
     } catch (const std::exception& ex) {
@@ -103,11 +107,9 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     // check if the camera has detected the benchmark marker and calculate its position and orientation in the world
     // frame yet, if not, calibrate it first
     CameraParameters* cam_params = nullptr;
-    for (auto& param : m_camera_parameters) {
-        if (param.serial == serial) {
-            cam_params = &param;
-            break;
-        }
+    auto it = m_camera_parameters.find(serial);
+    if (it != m_camera_parameters.end()) {
+        cam_params = &it->second;
     }
 
     if (!cam_params || cam_params->K.empty() || cam_params->D.empty()) {
@@ -196,7 +198,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         if (!calibrate_camera(log_enable, *cam_params, marker_ids, rvecs, tvecs)) {
             return;
         }
-        cam_params->calibrated = true;
+        // cam_params->calibrated = true;
     }
 
     if (log_enable)

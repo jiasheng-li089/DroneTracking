@@ -8,6 +8,7 @@
 #include <chrono>
 #include <librealsense2/rs.hpp>
 #include <mutex>
+#include <unordered_map>
 #include <opencv2/opencv.hpp>
 
 #include "../common/common.h"
@@ -68,7 +69,7 @@ class VisionTracker : public QObject {
 
     std::shared_ptr<tracking::TrackerConfig> m_config;
 
-    std::vector<CameraParameters> m_camera_parameters;
+    std::unordered_map<std::string, CameraParameters> m_camera_parameters;
 
     std::unique_ptr<MarkerParameter> m_benchmark_parameter;
 
