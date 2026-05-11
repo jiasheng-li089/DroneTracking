@@ -250,7 +250,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
 
         // beside calculating the marker pose, some offset must be applied to the marker pose to get the drone body
         // pose.
-        cv::Mat drone_world_pose = cam_params->pose * marker_camera_pose;  // * drone_marker_pose);
+        cv::Mat drone_world_pose = cam_params->pose * (marker_camera_pose * drone_marker_pose);
 
         if (known_marker_ids[i] != m_benchmark_parameter->id) {
             // skip the benchmark marker when calculating the drone pose,
