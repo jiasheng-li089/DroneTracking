@@ -45,7 +45,7 @@ cv::Vec3d get_rotation_from_pose_in_degrees(const cv::Mat& pose) {
     return cv::Vec3d(roll, pitch, yaw);
 }
 
-bool VisionTracker::calibrate_camera(CameraParameters& cam_params, std::vector<int>& marker_ids,
+bool VisionTracker::calibrate_camera(bool log, CameraParameters& cam_params, std::vector<int>& marker_ids,
                                      std::vector<cv::Vec3d>& rvecs, std::vector<cv::Vec3d>& tvecs) {
     // implement the camera calibration logic using the benchmark marker
     auto it = std::find(marker_ids.begin(), marker_ids.end(), m_benchmark_parameter->id);
@@ -70,8 +70,10 @@ bool VisionTracker::calibrate_camera(CameraParameters& cam_params, std::vector<i
     cv::Vec3d t = get_translation_from_pose(cam_params.pose);
     cv::Vec3d r = get_rotation_from_pose_in_degrees(cam_params.pose);
 
-    spdlog::info("Camera {} orientation in world (deg): yaw = {:.4f} pitch = {:.4f} roll = {:.4f}", cam_params.serial,
-                 r[2], r[1], r[0]);
+    if (log) {
+        spdlog::info("Camera {} orientation in world (deg): yaw = {:.4f} pitch = {:.4f} roll = {:.4f}", cam_params.serial,
+                     r[2], r[1], r[0]);
+    }
 
     emit update_camera_status(fmt::format("Camera #{}", cam_params.serial),
                               fmt::format("Calibrated: x = {:.4f}, y = {:.4f}, z = {:.4f}, "
@@ -166,7 +168,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
         std::vector<double> reproj_errors;
         cv::solvePnPGeneric(marker_param.obj_points, marker_corner, cam_params->K, cam_params->D, rvecs_out, tvecs_out,
                          false, cv::SOLVEPNP_IPPE_SQUARE, cv::noArray(), cv::noArray(), reproj_errors);
-        
+
         // figure out the best solution based on the reprojection error, and use it for the following processing.
         auto min_it = std::min_element(reproj_errors.begin(), reproj_errors.end());
         int best_index = std::distance(reproj_errors.begin(), min_it);
@@ -191,7 +193,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
     if (!cam_params->calibrated) {
         emit update_camera_status(fmt::format("Camera #{}", cam_params->serial), "Calibrating");
 
-        if (!calibrate_camera(*cam_params, marker_ids, rvecs, tvecs)) {
+        if (!calibrate_camera(log_enable, *cam_params, marker_ids, rvecs, tvecs)) {
             return;
         }
         cam_params->calibrated = true;
@@ -246,9 +248,11 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
 
         // beside calculating the marker pose, some offset must be applied to the marker pose to get the drone body
         // pose.
-        cv::Mat drone_world_pose = marker_camera_pose * cam_params->pose; // * drone_marker_pose);
+        cv::Mat drone_world_pose = cam_params->pose * marker_camera_pose;  // * drone_marker_pose);
 
         if (known_marker_ids[i] != m_benchmark_parameter->id) {
+            // skip the benchmark marker when calculating the drone pose,
+            // since the benchmark marker is not attached to the drone and its position is fixed in the world.
             drone_world_poses.push_back(drone_world_pose);
         }
 
@@ -263,7 +267,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
                                               "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
                                               pose.x, pose.y, pose.z, pose.yaw, pose.pitch, pose.roll));
 
-        if (log_enable) {
+        // if (log_enable) {
             double distance = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
             spdlog::info(
                 "Marker ID: {}, camera: {}, pos (m): [{:.4f}, {:.4f}, {:.4f}], "
@@ -279,7 +283,7 @@ void VisionTracker::process_frames(const int camera_id, const std::string& seria
                 spdlog::info("Depth value at marker center: {:.4f} m", depth_value);
             }
 #endif
-        }
+        // }
 #endif
     }
 

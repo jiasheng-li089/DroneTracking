@@ -59,7 +59,7 @@ class VisionTracker : public QObject {
    private:
     cv::Mat preprocess_frame(const std::string& serial, const rs2::frameset& frame);
 
-    bool calibrate_camera(CameraParameters& cam_params, std::vector<int>& marker_ids, std::vector<cv::Vec3d>& rvecs,
+    bool calibrate_camera(bool log, CameraParameters& cam_params, std::vector<int>& marker_ids, std::vector<cv::Vec3d>& rvecs,
                           std::vector<cv::Vec3d>& tvecs);
 
     std::map<int, MarkerParameter> m_marker_parameters;
