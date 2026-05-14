@@ -11,6 +11,7 @@
 #include "../tracking/TrackerConfig.h"
 #include "../tracking/VisionTracker.h"
 #include "CameraWidget.h"
+#include "config.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {

@@ -6,10 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(DEBUG_CHANNEL "Enable debug webrtc data channel" OFF)
+option(DEBUG_CHANNEL "Enable debug webrtc data channel" ON)
 option(ENABLE_DEPTH "Enable the depth stream for tracking" OFF)
 option(SHOW_SINGLE_MARKER_POSE "Show the pose of a single marker for debugging" ON)
 option(ENABLE_STEREO_CALIBRATION "Enable stereo calibration mode" OFF)
+option(CALIBRATE_ONCE "Calibrate the camera once and then use the cached pose" ON)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -77,16 +78,16 @@ list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "src/.*_main\.cpp$")
 
 message("All source files: ${ALL_SOURCE_FILES}")
 
-set(TARGET_NAMES 
-    "PhotoCapturer" 
-    "Test" 
-    "CameraCalibration" 
+set(TARGET_NAMES
+    "PhotoCapturer"
+    "Test"
+    "CameraCalibration"
     "DroneTracking"
 )
-set(TARGET_MAINS 
-    "photo_capturer_main.cpp" 
-    "test_realsense_main.cpp" 
-    "camera_calibration_main.cpp" 
+set(TARGET_MAINS
+    "photo_capturer_main.cpp"
+    "test_realsense_main.cpp"
+    "camera_calibration_main.cpp"
     "drone_tracking_main.cpp"
 )
 
@@ -96,6 +97,10 @@ foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
     add_executable("${PROJECT_NAME}_${key}" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/${value})
 endforeach()
 
+configure_file(
+  ${CMAKE_SOURCE_DIR}/src/config.h.in
+  ${CMAKE_BINARY_DIR}/config.h
+)
 
 # Include directories
 include_directories(
@@ -108,18 +113,7 @@ link_directories(
 
 # Targets linking
 foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
-    if(DEBUG_CHANNEL)
-        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE DEBUG_CHANNEL)
-    endif()
-    if(ENABLE_DEPTH)
-        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE ENABLE_DEPTH_CAMERA)
-    endif()
-    if (SHOW_SINGLE_MARKER_POSE)
-        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE SHOW_SINGLE_MARKER_POSE)
-    endif()
-    if (ENABLE_STEREO_CALIBRATION)
-        target_compile_definitions("${PROJECT_NAME}_${key}" PRIVATE ENABLE_STEREO_CALIBRATION)
-    endif()
+target_include_directories("${PROJECT_NAME}_${key}" PRIVATE ${CMAKE_BINARY_DIR})
     target_link_libraries("${PROJECT_NAME}_${key}" PRIVATE
             Qt6::Core
             Qt6::Gui

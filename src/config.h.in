@@ -1,0 +1,10 @@
+#pragma once
+
+#cmakedefine DEBUG_CHANNEL
+#cmakedefine ENABLE_DEPTH
+#cmakedefine SHOW_SINGLE_MARKER_POSE
+#cmakedefine ENABLE_STEREO_CALIBRATION
+#cmakedefine CALIBRATE_ONCE
+
+#define VERSION_MAJOR @VERSION_MAJOR@
+#define VERSION_MINOR @VERSION_MINOR@

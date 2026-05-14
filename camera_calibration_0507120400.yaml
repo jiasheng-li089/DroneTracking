@@ -42,30 +42,30 @@ marker:
    - id: 15
      angle: 0.0
      size: 0.08
-     drone_position_offset: [0.0, -0.1, -0.03] 
+     drone_position_offset: [0.0, 0.0, -0.05]
      drone_position_offset_note: "drone's position relative to the marker"
-     drone_rotation: [0.0, 0.0, 0.0] 
+     drone_rotation: [0.0, 0.0, 0.0]
      drone_rotation_note: "drone's rotation relative to the marker, in Euler angles (x, y, z)"
    - id: 301
      angle: 120.0
      size: 0.08
-     drone_position_offset: [0.0, -0.1, -0.03]
+     drone_position_offset: [0.0, 0.0, -0.05]
      drone_rotation: [0.0, 120.0, 0.0]
    - id: 348
      angle: 240.0
      size: 0.08
-     drone_position_offset: [0.0, -0.1, -0.03]
+     drone_position_offset: [0.0, 0.0, -0.05]
      drone_rotation: [0.0, 240.0, 0.0]
    - id: 11
      angle: 0.0
-     size: 0.08
+     size: 0.20
      drone_position_offset: [0.0, 0.0, 0.0]
      drone_rotation: [0.0, 0.0, 0.0]
 
 benchmark:
    id: 11
    angle: 0.0
-   size: 0.08
+   size: 0.20
 detector:
    dictionary: "DICT_ARUCO_ORIGINAL"
    parameters:

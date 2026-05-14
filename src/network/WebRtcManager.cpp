@@ -1,6 +1,7 @@
 #include "WebRtcManager.h"
 #include "WebSocketSignaling.h"
 #include "logger.h"
+#include "config.h"
 
 #include <rtc/rtc.hpp>
 #include <QJsonDocument>
