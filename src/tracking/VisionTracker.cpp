@@ -94,11 +94,11 @@ bool VisionTracker::calibrate_camera(bool log, CameraParameters &cam_params,
                  cam_params.serial, r[2], r[1], r[0]);
   }
 
-  emit update_camera_status(
-      fmt::format("Camera #{}", cam_params.serial),
-      fmt::format("Calibrated: x = {:.4f}, y = {:.4f}, z = {:.4f}, "
-                  "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
-                  t[0], t[1], t[2], r[2], r[1], r[0]));
+  // emit update_camera_status(
+  //     fmt::format("Camera #{}", cam_params.serial),
+  //     fmt::format("Calibrated: x = {:.4f}, y = {:.4f}, z = {:.4f}, "
+  //                 "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
+  //                 t[0], t[1], t[2], r[2], r[1], r[0]));
 
   spdlog::info("Camera {} calibrated from benchmark marker {}",
                cam_params.serial, m_benchmark_parameter->id);
@@ -319,11 +319,12 @@ void VisionTracker::process_frames(const int camera_id,
     cv::Vec3d r = get_rotation_from_pose_in_degrees(drone_world_pose);
 
     ObjectPose pose = ObjectPose::from_t_and_r(t, r);
-    emit update_camera_status(
-        fmt::format("Marker #{}_{}", serial, known_marker_ids[i]),
-        fmt::format("x = {:.4f}, y = {:.4f}, z = {:.4f}, "
-                    "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
-                    pose.x, pose.y, pose.z, pose.yaw, pose.pitch, pose.roll));
+    if (known_marker_ids[i] != m_benchmark_parameter->id)
+      emit update_camera_status(
+          fmt::format("Marker #{}_{}", serial, known_marker_ids[i]),
+          fmt::format("x = {:.4f}, y = {:.4f}, z = {:.4f}, "
+                      "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
+                      pose.x, pose.y, pose.z, pose.yaw, pose.pitch, pose.roll));
 
     // if (log_enable) {
     double distance = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
@@ -372,7 +373,7 @@ void VisionTracker::process_frames(const int camera_id,
 
     for (const auto &[cam_serial, pose] : m_latest_poses) {
       // the cached pose is too old, skip it
-      if (current_timestamp - pose.timestamp > 100) {
+      if (current_timestamp - pose.timestamp > 500) {
         continue;
       }
       t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
