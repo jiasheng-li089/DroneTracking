@@ -1,5 +1,6 @@
 #include "DroneTrackingWindow.h"
 
+#include <opencv2/core/matx.hpp>
 #include <spdlog/spdlog.h>
 
 #include <QBoxLayout>
@@ -12,11 +13,12 @@
 #include "../tracking/VisionTracker.h"
 #include "CameraWidget.h"
 #include "config.h"
+#include "../common/common.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* parent)
     : QMainWindow(parent), m_config_file(std::move(config_file)), m_rs_manager(std::make_unique<RealSenseManager>()) {
     m_webrtc_manager =
-        std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>("ws://localhost:8188", "janus-protocol"));
+        std::make_unique<WebRtcManager>(std::make_unique<WebSocketSignaling>(WEBSOCKET_URL, "janus-protocol"));
     m_vision_tracker =
         std::make_unique<tracking::VisionTracker>(std::make_shared<tracking::TrackerConfig>(m_config_file));
 
@@ -27,6 +29,13 @@ DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* paren
     connect(m_webrtc_manager.get(), &WebRtcManager::on_connection_state, this,
             &DroneTrackingWindow::on_webrtc_connection_state);
 
+    m_ping_timer = new QTimer(this);
+    connect(m_ping_timer, &QTimer::timeout, this, [this]() {
+        if (m_webrtc_manager) {
+            m_webrtc_manager->sendMessage("Ping", "");
+        }
+    });
+
     connect(m_rs_manager.get(), &RealSenseManager::frames_received, this, &DroneTrackingWindow::frames_received);
     connect(m_rs_manager.get(), &RealSenseManager::error_occurred, this, &DroneTrackingWindow::error_occurred);
 
@@ -35,7 +44,7 @@ DroneTrackingWindow::DroneTrackingWindow(std::string config_file, QWidget* paren
     connect(m_vision_tracker.get(), &tracking::VisionTracker::frames_received, this,
             &DroneTrackingWindow::frames_received);
     connect(m_vision_tracker.get(), &tracking::VisionTracker::publish_message, m_webrtc_manager.get(),
-            &WebRtcManager::publish_message);
+            &WebRtcManager::publish_pose);
     connect(m_vision_tracker.get(), &tracking::VisionTracker::update_camera_status, this,
             &DroneTrackingWindow::on_update_camera_status);
 }
@@ -71,7 +80,10 @@ void DroneTrackingWindow::setup_ui() {
     auto debug_channel_btn = new QPushButton("Send Debug Message", root_widget);
     button_layout->addWidget(debug_channel_btn);
     connect(debug_channel_btn, &QPushButton::clicked, this,
-            [this]() { m_webrtc_manager->sendMessage("Hello from debug channel!"); });
+            [this]() {
+                tracking::ObjectPose test_pose = tracking::ObjectPose::from_t_and_r(cv::Vec3d(), cv::Vec3d());
+                m_webrtc_manager->sendMessage("Pose", test_pose.to_json());
+            });
 #endif
 
     layout->addLayout(button_layout);
@@ -151,11 +163,13 @@ void DroneTrackingWindow::on_webrtc_connection_state(bool connected) {
         m_rs_manager->set_frame_callback(std::bind(&tracking::VisionTracker::process_frames, m_vision_tracker.get(),
                                                    std::placeholders::_1, std::placeholders::_2,
                                                    std::placeholders::_3));
+        m_ping_timer->start(3000);
     } else {
         m_log_te->append("WebRTC connection lost");
         on_widget_status_update(m_start_tracking_btn, true);
         on_widget_status_update(m_stop_tracking_btn, false);
         m_rs_manager->set_frame_callback(nullptr);
+        m_ping_timer->stop();
     }
 }
 

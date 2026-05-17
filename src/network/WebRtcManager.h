@@ -28,11 +28,11 @@ public:
     void setOnMessageCallback(std::function<void(const std::string&)> callback);
 
     // Send message via DataChannel
-    void sendMessage(const std::string& message);
+    void sendMessage(const std::string& type, const std::string& message);
 
     public slots:
-    void publish_message(const std::string& message) {
-        sendMessage(message);
+    void publish_pose(const std::string& message) {
+        sendMessage("Pose", message);
     }
 
 private:
@@ -43,6 +43,6 @@ private:
 
     std::unique_ptr<Signaling> m_signaling;
 
-    signals: 
+    signals:
         void on_connection_state(bool connected);
 };

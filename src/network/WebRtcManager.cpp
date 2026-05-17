@@ -3,8 +3,36 @@
 #include "logger.h"
 #include "config.h"
 
+#include <spdlog/fmt/ranges.h>
+
 #include <rtc/rtc.hpp>
 #include <QJsonDocument>
+#include <QJsonObject>
+
+#define CHANNEL_NAME "drone_data"
+#define SENDER_NAME "VisionTracker"
+
+struct ChannelMsg {
+    std::string data;
+    std::string channel;
+    std::string type;
+    std::string from;
+
+    static ChannelMsg create(std::string type, std::string data) {
+        return ChannelMsg{data, CHANNEL_NAME, type, SENDER_NAME};
+    }
+
+    std::string to_json() const {
+        QJsonObject obj;
+        obj["data"] = QString::fromStdString(data);
+        obj["channel"] = QString::fromStdString(channel);
+        obj["type"] = QString::fromStdString(type);
+        obj["from"] = QString::fromStdString(from);
+        
+        QJsonDocument doc(obj);
+        return doc.toJson(QJsonDocument::Compact).toStdString();
+    }
+};
 
 WebRtcManager::WebRtcManager(std::unique_ptr<Signaling> signaling, QObject *parent) : m_signaling(std::move(signaling)), QObject(parent) {}
 
@@ -81,7 +109,7 @@ void WebRtcManager::connect() {
     });
 
     // Create a data channel
-    m_data_channel = m_peer_connection->createDataChannel("drone_data");
+    m_data_channel = m_peer_connection->createDataChannel(CHANNEL_NAME);
     m_data_channel->onOpen([this]() {
         spdlog::info("Data channel opened");
         m_data_channel->send("Hello from DroneTracking WebRTC!");
@@ -120,12 +148,12 @@ void WebRtcManager::setOnMessageCallback(std::function<void(const std::string&)>
     m_on_message_callback = std::move(callback);
 }
 
-void WebRtcManager::sendMessage(const std::string& message) {
+void WebRtcManager::sendMessage(const std::string& type, const std::string& message) {
     if (m_data_channel && m_data_channel->isOpen()) {
 #ifdef DEBUG_CHANNEL
         spdlog::debug("Sending message on data channel: {}", message);
 #endif
-        m_data_channel->send(message);
+        m_data_channel->send(ChannelMsg::create(type, message).to_json());
     } else {
         spdlog::error("Cannot send message, data channel is invalid or not open: {}", message);
     }

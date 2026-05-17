@@ -10,6 +10,8 @@
 #include <librealsense2/rs.hpp>
 
 
+#include <QTimer>
+
 class RealSenseManager;
 class WebRtcManager;
 class Signaling;
@@ -52,6 +54,8 @@ class DroneTrackingWindow : public QMainWindow {
         QMap<int, CameraWidget*> m_camera_widgets;
 
         QMap<std::string, QLabel*> m_camera_labels;
+
+        QTimer* m_ping_timer{};
 
         std::string m_config_file;
 
