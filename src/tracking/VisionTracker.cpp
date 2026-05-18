@@ -370,17 +370,18 @@ void VisionTracker::process_frames(const int camera_id,
     cv::Vec3d t_sum(0, 0, 0);
     cv::Vec3d r_sum(0, 0, 0);
     double roll_sum = 0, pitch_sum = 0, yaw_sum = 0;
+    double n = static_cast<double>(m_latest_poses.size());
 
     for (const auto &[cam_serial, pose] : m_latest_poses) {
       // the cached pose is too old, skip it
       if (current_timestamp - pose.timestamp > 500) {
+        n --;
         continue;
       }
       t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
       r_sum += cv::Vec3d(pose.roll, pose.pitch, pose.yaw);
     }
 
-    double n = static_cast<double>(m_latest_poses.size());
     cv::Vec3d t_avg = t_sum / n;
     cv::Vec3d r_avg = r_sum / n;
 
