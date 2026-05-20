@@ -89,15 +89,15 @@ bool VisionTracker::calibrate_camera(bool log, CameraParameters &cam_params,
   cv::Vec3d r = get_rotation_from_pose_in_degrees(cam_params.pose);
 
   if (log) {
-    spdlog::info("Camera {} orientation in world (deg): yaw = {:.4f} pitch = "
-                 "{:.4f} roll = {:.4f}",
+    spdlog::info("Camera {} orientation in world (deg): yaw = {:.2f} pitch = "
+                 "{:.2f} roll = {:.2f}",
                  cam_params.serial, r[2], r[1], r[0]);
   }
 
   // emit update_camera_status(
   //     fmt::format("Camera #{}", cam_params.serial),
-  //     fmt::format("Calibrated: x = {:.4f}, y = {:.4f}, z = {:.4f}, "
-  //                 "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
+  //     fmt::format("Calibrated: x = {:.2f}, y = {:.2f}, z = {:.2f}, "
+  //                 "yaw = {:.2f}, pitch = {:.2f}, roll = {:.2f}",
   //                 t[0], t[1], t[2], r[2], r[1], r[0]));
 
   spdlog::info("Camera {} calibrated from benchmark marker {}",
@@ -322,15 +322,15 @@ void VisionTracker::process_frames(const int camera_id,
     if (known_marker_ids[i] != m_benchmark_parameter->id)
       emit update_camera_status(
           fmt::format("Marker #{}_{}", serial, known_marker_ids[i]),
-          fmt::format("x = {:.4f}, y = {:.4f}, z = {:.4f}, "
-                      "yaw = {:.4f}, pitch = {:.4f}, roll = {:.4f}",
+          fmt::format("x = {:.2f}, y = {:.2f}, z = {:.2f}, "
+                      "yaw = {:.2f}, pitch = {:.2f}, roll = {:.2f}",
                       pose.x, pose.y, pose.z, pose.yaw, pose.pitch, pose.roll));
 
     // if (log_enable) {
     double distance = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
     spdlog::info(
-        "Marker ID: {}, camera: {}, pos (m): [{:.4f}, {:.4f}, {:.4f}], "
-        "dist: {:.3f} m, rot (deg) yaw = {:.4f} pitch = {:.4f} roll = {:.4f}",
+        "Marker ID: {}, camera: {}, pos (m): [{:.2f}, {:.2f}, {:.2f}], "
+        "dist: {:.3f} m, rot (deg) yaw = {:.2f} pitch = {:.2f} roll = {:.2f}",
         known_marker_ids[i], serial, pose.x, pose.y, pose.z, distance, pose.yaw,
         pose.pitch, pose.roll);
 
@@ -342,7 +342,7 @@ void VisionTracker::process_frames(const int camera_id,
       float depth_value =
           depth_frame.get_distance(static_cast<int>(all_centers_2d[i].x),
                                    static_cast<int>(all_centers_2d[i].y));
-      spdlog::info("Depth value at marker center: {:.4f} m", depth_value);
+      spdlog::info("Depth value at marker center: {:.2f} m", depth_value);
     }
 #endif
     // }
