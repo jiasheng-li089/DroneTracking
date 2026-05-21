@@ -46,15 +46,31 @@ cv::Vec3d get_translation_from_pose(const cv::Mat &pose) {
  * return the rotation from the pose in degrees (roll, pitch, yaw)
  */
 cv::Vec3d get_rotation_from_pose_in_degrees(const cv::Mat &pose) {
+  // 1. Extract the 3x3 rotation matrix R
   cv::Mat R = pose(cv::Rect(0, 0, 3, 3));
-  cv::Vec3d rvec;
-  cv::Rodrigues(R, rvec);
+  R.convertTo(R, CV_64F); // Ensure double precision for trig calculations
 
-  double yaw = std::atan2(rvec[1], rvec[0]) * 180.0 / CV_PI;
-  double pitch =
-      std::atan2(-rvec[2], std::hypot(rvec[0], rvec[1])) * 180.0 / CV_PI;
-  double roll = std::atan2(rvec[2], rvec[1]) * 180.0 / CV_PI;
-  return cv::Vec3d(roll, pitch, yaw);
+  // 2. Prevent Gimbal Lock by checking the Y-axis pitch magnitude
+  double sy = std::hypot(R.at<double>(0, 0), R.at<double>(1, 0));
+  bool singular = sy < 1e-6;
+
+  double roll, pitch, yaw;
+
+  // 3. Extract angles directly from the Matrix R (Not a Rodrigues vector!)
+  if (!singular) {
+    roll = std::atan2(R.at<double>(2, 1), R.at<double>(2, 2));
+    pitch = std::atan2(-R.at<double>(2, 0), sy);
+    yaw = std::atan2(R.at<double>(1, 0), R.at<double>(0, 0));
+  } else {
+    // Gimbal lock fallback
+    roll = std::atan2(-R.at<double>(1, 2), R.at<double>(1, 1));
+    pitch = std::atan2(-R.at<double>(2, 0), sy);
+    yaw = 0;
+  }
+
+  // 4. Convert to degrees and return
+  return cv::Vec3d(roll * 180.0 / CV_PI, pitch * 180.0 / CV_PI,
+                   yaw * 180.0 / CV_PI);
 }
 
 bool VisionTracker::calibrate_camera(bool log, CameraParameters &cam_params,
@@ -375,7 +391,7 @@ void VisionTracker::process_frames(const int camera_id,
     for (const auto &[cam_serial, pose] : m_latest_poses) {
       // the cached pose is too old, skip it
       if (current_timestamp - pose.timestamp > 500) {
-        n --;
+        n--;
         continue;
       }
       t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
