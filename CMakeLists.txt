@@ -114,13 +114,11 @@ message(STATUS "dependency list: ${LINK_DEPENDENCY}")
 
 set(TARGET_NAMES
     "PhotoCapturer"
-    "Test"
     "CameraCalibration"
     "DroneTracking"
 )
 set(TARGET_MAINS
     "photo_capturer_main.cpp"
-    "test_realsense_main.cpp"
     "camera_calibration_main.cpp"
     "drone_tracking_main.cpp"
 )

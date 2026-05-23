@@ -7,6 +7,7 @@
 #include <qobject.h>
 #include <spdlog/spdlog.h>
 
+#include "camera/CameraManager.h"
 #include "config.h"
 
 #include <QBoxLayout>
@@ -15,6 +16,7 @@
 #ifdef USE_REALSENSE_CAMERA
 #include "../camera/RealSenseManager.h"
 #else
+#include "../camera/GenericCamerManager.h"
 #endif
 #include "../common/common.h"
 #include "../network/WebRtcManager.h"
@@ -29,7 +31,8 @@ DroneTrackingWindow::DroneTrackingWindow(std::string config_file,
 #ifdef USE_REALSENSE_CAMERA
       m_camera_manager(std::make_unique<RealSenseManager>()) {
 #else
-      m_camera_manager(std::make_unique<CameraManager::CameraManager>()) {
+      m_camera_manager(
+          std::make_unique<CameraManager::GenericCameraManager>()) {
 #endif
   m_webrtc_manager = std::make_unique<WebRtcManager>(
       std::make_unique<WebSocketSignaling>(WEBSOCKET_URL, "janus-protocol"));
@@ -53,8 +56,8 @@ DroneTrackingWindow::DroneTrackingWindow(std::string config_file,
 
   connect(m_camera_manager.get(), &CameraManager::CameraManager::frame_received,
           this, &DroneTrackingWindow::frame_received);
-  connect(m_camera_manager.get(), &RealSenseManager::error_occurred, this,
-          &DroneTrackingWindow::error_occurred);
+  connect(m_camera_manager.get(), &CameraManager::CameraManager::error_occurred,
+          this, &DroneTrackingWindow::error_occurred);
 
   connect(m_vision_tracker.get(), &tracking::VisionTracker::error_occurred,
           this, &DroneTrackingWindow::error_occurred);

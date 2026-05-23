@@ -1,18 +1,18 @@
 #include "PhotoCaptureWindow.h"
 
-#include "camera/CameraManager.h"
 #include "config.h"
+
 #include <opencv2/core/mat.hpp>
 
 #ifdef USE_REALSENSE_CAMERA
 #include "../camera/RealSenseManager.h"
 #else
+#include "../camera/GenericCamerManager.h"
 #endif
 
 #include <QDateTime>
 #include <QWidget>
 
-#include "../camera/RealSenseManager.h"
 #include "CameraWidget.h"
 
 PhotoCaptureWindow::PhotoCaptureWindow(std::string target_dir, QWidget *parent)
@@ -20,7 +20,7 @@ PhotoCaptureWindow::PhotoCaptureWindow(std::string target_dir, QWidget *parent)
 #ifdef USE_REALSENSE_CAMERA
       m_camera_manager(std::make_unique<RealSenseManager>()),
 #else
-      m_camera_manager(std::make_unique<CameraManager::CameraManager>()),
+      m_camera_manager(std::make_unique<CameraManager::GenericCameraManager>()),
 #endif
       m_capturer(std::make_unique<media::PhotoCaptureTask>(target_dir)) {
   setup_ui();

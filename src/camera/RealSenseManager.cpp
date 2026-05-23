@@ -1,7 +1,6 @@
 #include "RealSenseManager.h"
 
 #include <librealsense2/h/rs_sensor.h>
-#include <spdlog/spdlog.h>
 
 #include <chrono>
 #include <librealsense2/rs.hpp>
