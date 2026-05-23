@@ -11,6 +11,7 @@ option(ENABLE_DEPTH "Enable the depth stream for tracking" OFF)
 option(SHOW_SINGLE_MARKER_POSE "Show the pose of a single marker for debugging" ON)
 option(ENABLE_STEREO_CALIBRATION "Enable stereo calibration mode" OFF)
 option(CALIBRATE_ONCE "Calibrate the camera once and then use the cached pose" ON)
+option(USE_REALSENSE_CAMERA "Use the realsense cameras" ON)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -21,10 +22,18 @@ else()
     message(STATUS "ccache not found. Compilation will not be accelerated.")
 endif()
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(REALSENSE REQUIRED realsense2)
 
-message("header files path of realsense: ${REALSENSE_INCLUDE_DIRS}")
-message("library files path of realsense: ${REALSENSE_LIBRARY_DIRS}")
+if (USE_REALSENSE_CAMERA)
+    pkg_check_modules(REALSENSE QUIET realsense2)
+
+    if (NOT REALSENSE_FOUND)
+        message(WARNING "cannot find the dependency: realsense")
+        set(USE_REALSENSE_CAMERA OFF)
+        SET(ENABLE_DEPTH OFF)
+    endif()
+
+endif()
+
 
 # Automatically enable moc, uic, and rcc for Qt
 set(CMAKE_AUTOMOC ON)
@@ -33,6 +42,8 @@ set(CMAKE_AUTOUIC ON)
 
 # Find Qt6 components
 find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets OpenGLWidgets REQUIRED)
+
+# Find the opencv components
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect)
 
 # LibDataChannel for WebRTC
@@ -57,16 +68,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
-FetchContent_Declare(
-    yaml-cpp
-    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-    GIT_TAG        master
-)
-set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE INTERNAL "")
-FetchContent_MakeAvailable(yaml-cpp)
-
 file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.cpp"
     "src/*.c"
@@ -74,9 +75,43 @@ file(GLOB_RECURSE ALL_SOURCE_FILES
     "src/*.hpp"
 )
 
+set(LINK_DEPENDENCY
+    datachannel
+    spdlog::spdlog
+)
+
 list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "src/.*_main\.cpp$")
 
-message("All source files: ${ALL_SOURCE_FILES}")
+if (NOT USE_REALSENSE_CAMERA)
+    # remove source files related to realsense camera from the file list
+    list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "src/.*RealSense.*\.(h|cpp)$")
+    message(STATUS "current all source files: ${ALL_SOURCE_FILES}")
+else()
+    include_directories(${REALSENSE_INCLUDE_DIRS})
+    link_directories(${REALSENSE_LIBRARY_DIRS})
+
+    list(APPEND LINK_DEPENDENCY ${REALSENSE_LIBRARIES})
+endif()
+
+if (NOT Qt6_FOUND)
+    message(WARNING "Cannot find the dependency: Qt6")
+else()
+    list(APPEND LINK_DEPENDENCY
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::WebSockets
+        Qt6::OpenGLWidgets
+    )
+endif()
+
+if (NOT OpenCV_FOUND)
+    message(WARNING "Cannot find the dependency: OpenCV")
+else()
+    list(APPEND LINK_DEPENDENCY ${OpenCV_LIBS})
+endif()
+
+message(STATUS "dependency list: ${LINK_DEPENDENCY}")
 
 set(TARGET_NAMES
     "PhotoCapturer"
@@ -93,8 +128,8 @@ set(TARGET_MAINS
 
 # Application Executable
 foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
-    message("adding target: ${key} with main file: ${value}")
-    add_executable("${PROJECT_NAME}_${key}" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/${value})
+    message(STATUS "adding target: ${key} with main file: ${value}")
+    add_executable("${key}" ${ALL_SOURCE_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/src/${value})
 endforeach()
 
 configure_file(
@@ -104,26 +139,14 @@ configure_file(
 
 # Include directories
 include_directories(
-    ${REALSENSE_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-link_directories(
-    ${REALSENSE_LIBRARY_DIRS}
 )
 
 # Targets linking
 foreach(key value IN ZIP_LISTS TARGET_NAMES TARGET_MAINS)
-target_include_directories("${PROJECT_NAME}_${key}" PRIVATE ${CMAKE_BINARY_DIR})
-    target_link_libraries("${PROJECT_NAME}_${key}" PRIVATE
-            Qt6::Core
-            Qt6::Gui
-            Qt6::Widgets
-            Qt6::WebSockets
-            Qt6::OpenGLWidgets
-            datachannel
-            spdlog::spdlog
-            yaml-cpp::yaml-cpp
-        ${REALSENSE_LIBRARIES}
-        ${OpenCV_LIBS}
+    target_include_directories("${key}" PRIVATE ${CMAKE_BINARY_DIR})
+
+    target_link_libraries("${key}" PRIVATE
+        ${LINK_DEPENDENCY}
     )
 endforeach()
