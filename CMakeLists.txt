@@ -7,7 +7,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(DEBUG_CHANNEL "Enable debug webrtc data channel" ON)
-option(ENABLE_DEPTH "Enable the depth stream for tracking" OFF)
 option(SHOW_SINGLE_MARKER_POSE "Show the pose of a single marker for debugging" ON)
 option(ENABLE_STEREO_CALIBRATION "Enable stereo calibration mode" OFF)
 option(CALIBRATE_ONCE "Calibrate the camera once and then use the cached pose" ON)

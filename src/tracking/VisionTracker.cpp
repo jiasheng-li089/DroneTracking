@@ -1,5 +1,6 @@
 #include "VisionTracker.h"
 
+#include <opencv2/core/mat.hpp>
 #include <opencv2/core/matx.hpp>
 #include <spdlog/spdlog.h>
 
@@ -123,7 +124,7 @@ bool VisionTracker::calibrate_camera(bool log, CameraParameters &cam_params,
 
 void VisionTracker::process_frames(const int camera_id,
                                    const std::string &serial,
-                                   const rs2::frameset &frames) {
+                                   const ulong frame_id, const cv::Mat &frame) {
   auto now = std::chrono::steady_clock::now();
   auto &last = m_last_frame_times[serial];
   double fps = 0.0;
@@ -133,12 +134,12 @@ void VisionTracker::process_frames(const int camera_id,
   }
   last = now;
 
-  auto log_enable = frames.get_frame_number() % 30 == 0;
+  auto log_enable = frame_id % 30 == 0;
 
   if (log_enable)
     spdlog::debug(
         "Received frames from cameraId ({}), frame number: {}, fps: {:.2f}",
-        serial, frames.get_frame_number(), fps);
+        serial, frame_id, fps);
 
   // check if the camera has detected the benchmark marker and calculate its
   // position and orientation in the world frame yet, if not, calibrate it first
@@ -156,7 +157,7 @@ void VisionTracker::process_frames(const int camera_id,
 
   // obtain the position of the camera related to the benchmark marker if have
   // not yet.
-  auto rgb_frame = preprocess_frame(serial, frames);
+  auto rgb_frame = preprocess_frame(serial, frame);
   // detect the possible position of the target (aruco) related to the camera.
   std::vector<int> marker_ids;
   std::vector<std::vector<cv::Point2f>> marker_corners, rejected_candidates;
@@ -246,10 +247,7 @@ void VisionTracker::process_frames(const int camera_id,
         std::vector<std::vector<cv::Point2f>>{known_marker_corners[i]},
         std::vector<int>{known_marker_ids[i]});
   }
-  QImage qimg(output_image.data, output_image.cols, output_image.rows,
-              static_cast<int>(output_image.step), QImage::Format_RGB888);
-  emit frames_received(std::vector<std::tuple<int, std::string, QImage>>{
-      {camera_id + 200, serial, qimg.copy()}});
+  emit frame_received(camera_id + 200, serial, frame_id, output_image);
 
   if (known_marker_corners.empty() ||
       (known_marker_corners.size() == 1 &&
@@ -407,35 +405,7 @@ void VisionTracker::process_frames(const int camera_id,
 }
 
 cv::Mat VisionTracker::preprocess_frame(const std::string &serial,
-                                        const rs2::frameset &frame) {
-  // convert the rgb frame from realsense to opencv format
-  auto color = frame.get_color_frame();
-
-  cv::Mat rgb_frame;
-  auto it = m_cache_frames.find(serial);
-  if (it != m_cache_frames.end()) {
-    rgb_frame = it->second;
-    // check if the size of the cache is same as the new frame, if not, update
-    // the cache
-    if (rgb_frame.cols != color.get_width() ||
-        rgb_frame.rows != color.get_height()) {
-      rgb_frame = cv::Mat(color.get_height(), color.get_width(), CV_8UC3,
-                          (void *)color.get_data())
-                      .clone();
-      m_cache_frames[serial] = rgb_frame;
-    } else {
-      // update the data of the cache frame
-      std::memcpy(rgb_frame.data, color.get_data(),
-                  color.get_width() * color.get_height() * 3);
-    }
-  } else {
-    // does not exist in cache, create a new one and store it in cache
-    rgb_frame = cv::Mat(color.get_height(), color.get_width(), CV_8UC3,
-                        (void *)color.get_data())
-                    .clone();
-    m_cache_frames[serial] = rgb_frame;
-  }
-
-  return rgb_frame;
+                                        const cv::Mat &frame) {
+  return frame.clone();
 }
 } // namespace tracking
