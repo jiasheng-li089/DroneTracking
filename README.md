@@ -4,9 +4,14 @@ A cross-platform (Windows & Linux) C++ Desktop Application utilizing Qt6, WebSoc
 
 ## Project Structure
 - `src/` - Contains all C++ source code.
-  - `main.cpp` - Application entry point.
+  - `test_main.cpp` - Test application entry point, for debug and experiment of code.
+  - `camera_calibration_main.cpp` - Camera calibration application entry point.
+  - `drone_tracking_main.cpp` - Drone tracking application entry point.
+  - `photo_capturer_main.cpp` - Photo capturer application entry point.
+  - `camera/` - Camera module including generic and realsense cameras.
   - `gui/` - Qt UI Classes (`MainWindow` implemented using layout managers).
   - `network/` - Network handling (`WebSocketClient` for signaling, and `WebRtcManager` using libdatachannel).
+  - `tracking/` - ArUco markers based tracking and related configuration.
 - `CMakeLists.txt` - Modern CMake script using FetchContent to automatically bring in the WebRTC dependency without requiring manual installation.
 
 ## Technologies Used
