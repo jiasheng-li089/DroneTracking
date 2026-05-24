@@ -15,7 +15,7 @@ std::vector<int> detect_rgb_cameras() {
   std::vector<int> rgb_cameras;
 
 #if defined(__linux__)
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 30; i++) {
     std::string camera_path = "/dev/video" + std::to_string(i);
     int fd = open(camera_path.c_str(), O_RDWR);
     if (fd == -1) {
@@ -24,7 +24,8 @@ std::vector<int> detect_rgb_cameras() {
     v4l2_capability cap;
     if (ioctl(fd, VIDIOC_QUERYCAP, &cap) == 0) {
       std::string name = (const char *)cap.card;
-      spdlog::info("Found camera: {}", name);
+      std::string bus = (const char *)cap.bus_info;
+      spdlog::info("Found camera: {} on bus: {}", name, bus);
 
       if (name.find("Depth") == std::string::npos &&
           name.find("IR") == std::string::npos) {
