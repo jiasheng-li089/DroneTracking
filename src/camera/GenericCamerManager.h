@@ -11,6 +11,9 @@ public:
 
   void start_cameras() override;
   void stop_cameras() override;
+
+private:
+  void camera_worker_thread(const int, const std::string);
 };
 
 } // namespace CameraManager

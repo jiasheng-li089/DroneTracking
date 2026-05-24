@@ -23,7 +23,7 @@ public:
           callback);
 
 signals:
-  void frame_received(int, std::string &, ulong, cv::Mat);
+  void frame_received(int, const std::string &, ulong, const cv::Mat);
   void error_occurred(QString err);
 
 protected:

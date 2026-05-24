@@ -43,7 +43,7 @@ set(CMAKE_AUTOUIC ON)
 find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets OpenGLWidgets REQUIRED)
 
 # Find the opencv components
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect videoio highgui)
 
 # LibDataChannel for WebRTC
 # We use FetchContent to integrate a lightweight C/C++ WebRTC library,
@@ -116,11 +116,13 @@ set(TARGET_NAMES
     "PhotoCapturer"
     "CameraCalibration"
     "DroneTracking"
+    "Test"
 )
 set(TARGET_MAINS
     "photo_capturer_main.cpp"
     "camera_calibration_main.cpp"
     "drone_tracking_main.cpp"
+    "test_main.cpp"
 )
 
 # Application Executable
