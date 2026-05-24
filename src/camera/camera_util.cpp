@@ -2,6 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <spdlog/spdlog.h>
+#include <sys/ioctl.h>
 
 #if defined(__linux__)
 #include <fcntl.h>
@@ -19,6 +20,16 @@ std::vector<int> detect_rgb_cameras() {
     int fd = open(camera_path.c_str(), O_RDWR);
     if (fd == -1) {
       continue;
+    }
+    v4l2_capability cap;
+    if (ioctl(fd, VIDIOC_QUERYCAP, &cap) == 0) {
+      std::string name = (const char *)cap.card;
+      spdlog::info("Found camera: {}", name);
+
+      if (name.find("Depth") == std::string::npos &&
+          name.find("IR") == std::string::npos) {
+        rgb_cameras.push_back(i);
+      }
     }
 
     close(fd);
