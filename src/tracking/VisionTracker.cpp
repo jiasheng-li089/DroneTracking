@@ -365,6 +365,13 @@ void VisionTracker::process_frames(const int camera_id,
 #endif
   }
 
+  if (drone_world_poses.size() <= 0) {
+    // all computed poses are invalid, stop sending pose to the controller
+    spdlog::warn("All computed poses are invalid, stop sending pose to the "
+                 "controller");
+    return;
+  }
+
   cv::Vec3d avg_translation(0, 0, 0);
   cv::Vec3d avg_rotation(0, 0, 0);
   for (const auto &pose : drone_world_poses) {
@@ -396,13 +403,6 @@ void VisionTracker::process_frames(const int camera_id,
       }
       t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
       r_sum += cv::Vec3d(pose.roll, pose.pitch, pose.yaw);
-    }
-
-    if (n <= 0) {
-      // all computed poses are invalid, stop sending pose to the controller
-      spdlog::warn("All computed poses are invalid, stop sending pose to the "
-                   "controller");
-      return;
     }
 
     cv::Vec3d t_avg = t_sum / n;
