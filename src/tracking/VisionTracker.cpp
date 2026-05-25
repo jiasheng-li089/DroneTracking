@@ -398,6 +398,13 @@ void VisionTracker::process_frames(const int camera_id,
       r_sum += cv::Vec3d(pose.roll, pose.pitch, pose.yaw);
     }
 
+    if (n <= 0) {
+      // all computed poses are invalid, stop sending pose to the controller
+      spdlog::warn("All computed poses are invalid, stop sending pose to the "
+                   "controller");
+      return;
+    }
+
     cv::Vec3d t_avg = t_sum / n;
     cv::Vec3d r_avg = r_sum / n;
 
