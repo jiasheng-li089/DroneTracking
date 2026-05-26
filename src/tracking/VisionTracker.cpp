@@ -136,19 +136,17 @@ bool VisionTracker::calibrate_camera(bool log, CameraParameters &cam_params,
   auto tvec = tvecs[index];
 
   // The pose of the benchmark marker relative to the camera
-  cv::Mat R_benchmark_cam_pose = cv::Mat::eye(4, 4, CV_64F);
-  cv::Rodrigues(rvec, R_benchmark_cam_pose(cv::Rect(0, 0, 3, 3)));
-  cv::Mat(tvec).copyTo(R_benchmark_cam_pose(cv::Rect(3, 0, 1, 3)));
+  cv::Mat benchmark_cam_pose = cv::Mat::eye(4, 4, CV_64F);
+  cv::Rodrigues(rvec, benchmark_cam_pose(cv::Rect(0, 0, 3, 3)));
+  cv::Mat(tvec).copyTo(benchmark_cam_pose(cv::Rect(3, 0, 1, 3)));
 
-  cam_params.pose =
-      R_benchmark_cam_pose
-          .inv(); // Invert to get camera pose in benchmark marker frame
-
-  // extract rotation and translation from the camera pose
-  cv::Vec3d t = get_translation_from_pose(cam_params.pose);
-  cv::Vec3d r = get_rotation_from_pose_in_degrees(cam_params.pose);
+  // Invert to get camera pose in benchmark marker frame
+  cam_params.pose = benchmark_cam_pose.inv(); 
 
   if (log) {
+    // extract rotation and translation from the camera pose
+    cv::Vec3d t = get_translation_from_pose(cam_params.pose);
+    cv::Vec3d r = get_rotation_from_pose_in_degrees(cam_params.pose);
     spdlog::info("Camera {} orientation in world (deg): yaw = {:.2f} pitch = "
                  "{:.2f} roll = {:.2f}",
                  cam_params.serial, r[2], r[1], r[0]);
@@ -161,7 +159,7 @@ bool VisionTracker::calibrate_camera(bool log, CameraParameters &cam_params,
   //                 t[0], t[1], t[2], r[2], r[1], r[0]));
 
   spdlog::info("Camera {} calibrated from benchmark marker {}",
-               cam_params.serial, m_benchmark_parameter->id);
+               cam_params.serial, marker_ids[index]);
   return true;
 }
 
@@ -304,7 +302,7 @@ void VisionTracker::process_frames(const int camera_id,
     emit update_camera_status(fmt::format("Camera #{}", cam_params.serial),
                               "Calibrating");
 
-    if (!calibrate_camera(log_enable, cam_params, marker_ids, rvecs, tvecs)) {
+    if (!calibrate_camera(log_enable, cam_params, known_marker_ids, rvecs, tvecs)) {
       return;
     }
 #ifdef CALIBRATE_ONCE
