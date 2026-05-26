@@ -33,7 +33,7 @@ set(CMAKE_AUTOUIC ON)
 
 # Find Qt6 components
 find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets OpenGLWidgets REQUIRED)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect video)
 
 # LibDataChannel for WebRTC
 # We use FetchContent to integrate a lightweight C/C++ WebRTC library,

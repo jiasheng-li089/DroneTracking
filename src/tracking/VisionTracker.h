@@ -1,13 +1,14 @@
 #pragma once
 
+#include <opencv2/core/hal/interface.h>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/video/tracking.hpp>
 #include <spdlog/fmt/ranges.h>
 
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
 #include <librealsense2/rs.hpp>
-#include <mutex>
 #include <opencv2/opencv.hpp>
 #include <unordered_map>
 
@@ -52,9 +53,11 @@ struct MarkerParameter; // Forward declaration
 class TrackerConfig;
 
 struct ComputationData {
-  int64 last_time;
+  int64 last_frame_time;
+  int64 last_computed_time;
   ObjectPose computed_pose;
   cv::Mat cache_frame;
+  cv::KalmanFilter kf;
 };
 
 class VisionTracker : public QObject {
@@ -70,8 +73,7 @@ public:
 
 signals:
   void error_occurred(const QString &error_message);
-  void
-  frames_received(std::vector<std::tuple<int, std::string, QImage>> frames);
+  void frames_received(std::vector<std::tuple<int, std::string, QImage>> frames);
   void publish_message(const std::string message);
   void update_camera_status(std::string serial, std::string status);
 

@@ -1,9 +1,12 @@
 #include "VisionTracker.h"
 
 #include <cstring>
+#include <opencv2/core.hpp>
 #include <opencv2/core/hal/interface.h>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/matx.hpp>
+#include <opencv2/core/types.hpp>
+#include <qtmetamacros.h>
 #include <spdlog/spdlog.h>
 
 #include <QImage>
@@ -11,8 +14,15 @@
 #include "TrackerConfig.h"
 #include "common/common.h"
 #include "config.h"
+#include "spdlog/fmt/bundled/format.h"
 
 namespace tracking {
+
+void update_measurement_matrix(cv::Mat& measurement_matrix, float dt) {
+  measurement_matrix.at<float>(0, 3) = dt;
+  measurement_matrix.at<float>(1, 4) = dt;
+  measurement_matrix.at<float>(2, 5) = dt;
+}
 
 VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config,
                              QObject *parent)
@@ -30,7 +40,35 @@ VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config,
       m_camera_parameters[param.serial] = param;
 
       // initilize the computation data
-      m_computation_data[param.serial] = ComputationData();
+      ComputationData data;
+      data.kf.init(6, 3, 0, CV_32F);
+      data.last_computed_time = current_timestamp_ms();
+
+      // transition matrix (A)
+      data.kf.transitionMatrix = (cv::Mat_<float>(6, 6) <<
+        1, 0, 0, 1, 0, 0,
+        0, 1, 0, 0, 1, 0,
+        0, 0, 1, 0, 0, 1,
+        0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 1);
+      
+      // measurement matrix (H)
+      data.kf.measurementMatrix = cv::Mat::zeros(3, 6, CV_32F);
+      data.kf.measurementMatrix.at<float>(0, 0) = 1.0f;
+      data.kf.measurementMatrix.at<float>(1, 1) = 1.0f;
+      data.kf.measurementMatrix.at<float>(2, 2) = 1.0f;
+
+      // process noise covariance (Q)
+      cv::setIdentity(data.kf.processNoiseCov, cv::Scalar::all(1e-4));
+
+      // measurement noise covariance (R)
+      cv::setIdentity(data.kf.measurementNoiseCov, cv::Scalar::all(1e-4));
+      
+      // error covariance (P)
+      cv::setIdentity(data.kf.errorCovPost, cv::Scalar::all(1));
+
+      m_computation_data[param.serial] = data;
     }
 
     m_benchmark_parameter =
@@ -132,8 +170,9 @@ void VisionTracker::process_frames(const int camera_id,
                                    const rs2::frameset &frames) {
   ComputationData &data = m_computation_data[serial];
 
-  auto last_time = data.last_time;
-  data.last_time = current_timestamp_ms();
+  auto last_time = data.last_frame_time;
+  auto current_timestamp = current_timestamp_ms();
+  data.last_frame_time = current_timestamp;
 
   auto log_enable = frames.get_frame_number() % 30 == 1;
 
@@ -141,7 +180,7 @@ void VisionTracker::process_frames(const int camera_id,
     spdlog::debug(
         "Received frame from camera ({}), frame number: {}, fps: {:.2f}",
         serial, frames.get_frame_number(),
-        1000.0 / (data.last_time - last_time));
+        1000.0 / (data.last_frame_time - last_time));
   }
 
   // check if the camera has detected the benchmark marker and calculate its
@@ -211,15 +250,13 @@ void VisionTracker::process_frames(const int camera_id,
     rvecs.at(i) = rvecs_out.at(best_index);
     tvecs.at(i) = tvecs_out.at(best_index);
 
-    if (log_enable) {
-      spdlog::debug(
-          "Marker ID: {}, reprojection errors for different solutions: [{}], "
-          "selected solution index: {}, "
-          "rvec: [{:.2f}, {:.2f}, {:.2f}], tvec: [{:.2f}, {:.2f}, {:.2f}]",
-          known_marker_ids[i], fmt::join(reproj_errors, ", "), best_index,
-          rvecs.at(i)[0], rvecs.at(i)[1], rvecs.at(i)[2], tvecs.at(i)[0],
-          tvecs.at(i)[1], tvecs.at(i)[2]);
-    }
+    spdlog::debug(
+        "Marker ID: {}, reprojection errors for different solutions: [{}], "
+        "selected solution index: {}, "
+        "rvec: [{:.2f}, {:.2f}, {:.2f}], tvec: [{:.2f}, {:.2f}, {:.2f}]",
+        known_marker_ids[i], fmt::join(reproj_errors, ", "), best_index,
+        rvecs.at(i)[0], rvecs.at(i)[1], rvecs.at(i)[2], tvecs.at(i)[0],
+        tvecs.at(i)[1], tvecs.at(i)[2]);
 #else
     // solvePnP to get the relative position of the target (aruco) to the camera
     cv::solvePnP(marker_param.obj_points, marker_corner, cam_params.K,
@@ -255,6 +292,7 @@ void VisionTracker::process_frames(const int camera_id,
       (known_marker_corners.size() == 1 &&
        known_marker_ids[0] == m_benchmark_parameter->id)) {
     // notify the GUI that current tracking status is "Lost"
+    if (log_enable)
     spdlog::debug("No known markers detected from cameraId ({}), skipping "
                   "pose estimation",
                   serial);
@@ -381,10 +419,30 @@ void VisionTracker::process_frames(const int camera_id,
   avg_translation /= static_cast<int>(drone_world_poses.size());
   avg_rotation /= static_cast<int>(drone_world_poses.size());
 
-  data.computed_pose = ObjectPose::from_t_and_r(avg_translation, avg_rotation);
+  // TODO need to apply kalman filter to the computed translation
+  float dt = (current_timestamp - data.last_computed_time) / 1000.0f;
+  update_measurement_matrix(data.kf.measurementMatrix, dt);
+
+  cv::Mat prediction = data.kf.predict();
+  cv::Mat estimation = data.kf.correct((cv::Mat_<float>(3, 1) <<
+    (float) avg_translation[0],
+    (float) avg_translation[1],
+    (float) avg_translation[2]
+  ));
+
+  cv::Vec3d smoothed_translation(
+    estimation.at<float>(0, 0),
+    estimation.at<float>(1, 0),
+    estimation.at<float>(2, 0)
+  );
+  data.computed_pose = ObjectPose::from_t_and_r(smoothed_translation, avg_rotation);
+  data.last_computed_time = current_timestamp;
+  emit update_camera_status(
+    fmt::format("Drone_{}", serial),
+    fmt::format("x = {:.2f}, y = {:.2f}, z = {:.2f}", data.computed_pose.x, data.computed_pose.y, data.computed_pose.z)
+  );
 
   // only read operation for m_computation_data, not need to lock the data
-  auto current_timestamp = current_timestamp_ms();
   cv::Vec3d t_sum(0, 0, 0);
   cv::Vec3d r_sum(0, 0, 0);
   double roll_sum = 0, pitch_sum = 0, yaw_sum = 0;
@@ -393,7 +451,7 @@ void VisionTracker::process_frames(const int camera_id,
   for (auto &[cam_serial, tmp_data] : m_computation_data) {
     ObjectPose &pose = tmp_data.computed_pose;
     // the cached pose is too old, skip it
-    if (current_timestamp - pose.timestamp > 500) {
+    if (current_timestamp - pose.timestamp > 100) {
       n--;
       continue;
     }
