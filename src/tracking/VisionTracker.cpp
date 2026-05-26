@@ -360,7 +360,7 @@ void VisionTracker::process_frames(const int camera_id,
       // some offset around z axis can be applied to make the translation closer
       // to the drone's actual position.
       auto z_offset = drone_marker_pose.at<double>(3, 2);
-      drone_world_pose.at<double>(2, 3) += z_offset;
+      drone_world_pose.at<double>(3, 2) += z_offset;
       // skip the benchmark marker when calculating the drone pose,
       // since the benchmark marker is not attached to the drone and its
       // position is fixed in the world.
