@@ -201,8 +201,10 @@ void VisionTracker::process_frames(const int camera_id,
   m_aruco_detector.detectMarkers(rgb_frame, marker_corners, marker_ids,
                                  rejected_candidates);
 
-  spdlog::debug("detected {} markers from cameraId ({}): [{}]",
-                marker_corners.size(), serial, fmt::join(marker_ids, ", "));
+  if (log_enable) {
+    spdlog::debug("detected {} markers from cameraId ({}): [{}]",
+                  marker_corners.size(), serial, fmt::join(marker_ids, ", "));
+  }
 
   // ignore all unknown markers for now, but log them for debugging
   std::vector<int> known_marker_ids;
@@ -232,7 +234,7 @@ void VisionTracker::process_frames(const int camera_id,
   for (size_t i = 0; i < size; ++i) {
     const auto &marker_param = known_marker_parameters[i];
     const auto &marker_corner = known_marker_corners[i];
-#define USE_GENERIC_SOLVE_PNP 1
+// #define USE_GENERIC_SOLVE_PNP 0
 #ifdef USE_GENERIC_SOLVE_PNP
     std::vector<cv::Mat> rvecs_out, tvecs_out;
     std::vector<double> reproj_errors;
@@ -263,37 +265,45 @@ void VisionTracker::process_frames(const int camera_id,
 #endif
   }
 
-  // show detected markers on the image
-  std::vector<cv::Point2f> all_centers_2d(size);
   // generate a new image and mark the detected markers on the image, then emit
   // the signal to update the GUI
-  cv::Mat output_image = rgb_frame.clone();
-  for (size_t i = 0; i < size; ++i) {
-    std::vector<cv::Point3f> center_3d = {cv::Point3f(0, 0, 0)};
-    std::vector<cv::Point2f> center_2d;
-    cv::projectPoints(center_3d, rvecs.at(i), tvecs.at(i), cam_params.K,
-                      cam_params.D, center_2d);
-    all_centers_2d[i] = center_2d.at(0);
-    cv::circle(output_image, center_2d.at(0), 5, cv::Scalar(0, 255, 0), -1);
+  // OPTIMIZATION: Throttle GUI updates (e.g., 10 FPS / every 3 frames) to avoid heavy image copying
+  bool update_gui = frames.get_frame_number() % 3 == 0;
+  if (update_gui) {
+    // show detected markers on the image
+    std::vector<cv::Point2f> all_centers_2d(size);
 
-    cv::aruco::drawDetectedMarkers(
-        output_image,
-        std::vector<std::vector<cv::Point2f>>{known_marker_corners[i]},
-        std::vector<int>{known_marker_ids[i]});
+    // calculate center points
+    for (size_t i = 0; i < size; ++i) {
+      std::vector<cv::Point3f> center_3d = {cv::Point3f(0, 0, 0)};
+      std::vector<cv::Point2f> center_2d;
+      cv::projectPoints(center_3d, rvecs.at(i), tvecs.at(i), cam_params.K,
+                        cam_params.D, center_2d);
+      all_centers_2d[i] = center_2d.at(0);
+    }
+
+    cv::Mat output_image = rgb_frame.clone();
+    for (size_t i = 0; i < size; ++i) {
+      cv::circle(output_image, all_centers_2d[i], 5, cv::Scalar(0, 255, 0), -1);
+      cv::aruco::drawDetectedMarkers(
+          output_image,
+          std::vector<std::vector<cv::Point2f>>{known_marker_corners[i]},
+          std::vector<int>{known_marker_ids[i]});
+    }
+    QImage qimg(output_image.data, output_image.cols, output_image.rows,
+                static_cast<int>(output_image.step), QImage::Format_RGB888);
+    emit frames_received(std::vector<std::tuple<int, std::string, QImage>>{
+        {camera_id + 200, serial, qimg.copy()}});
   }
-  QImage qimg(output_image.data, output_image.cols, output_image.rows,
-              static_cast<int>(output_image.step), QImage::Format_RGB888);
-  emit frames_received(std::vector<std::tuple<int, std::string, QImage>>{
-      {camera_id + 200, serial, qimg.copy()}});
 
   if (known_marker_corners.empty() ||
       (known_marker_corners.size() == 1 &&
        known_marker_ids[0] == m_benchmark_parameter->id)) {
     // notify the GUI that current tracking status is "Lost"
     if (log_enable)
-    spdlog::debug("No known markers detected from cameraId ({}), skipping "
-                  "pose estimation",
-                  serial);
+      spdlog::debug("No known markers detected from cameraId ({}), skipping "
+                    "pose estimation",
+                    serial);
     return;
   }
 
@@ -461,6 +471,19 @@ void VisionTracker::process_frames(const int camera_id,
   cv::Vec3d r_avg = r_sum / n;
 
   ObjectPose final_pose = ObjectPose::from_t_and_r(t_avg, r_avg);
+  
+  // Compute and log pose publication frequency
+  static uint64_t last_publish_log_time = current_timestamp;
+  static int publish_count = 0;
+  
+  publish_count++;
+  if (current_timestamp - last_publish_log_time >= 1000) { // every 1000 ms
+    double freq = publish_count * 1000.0 / (current_timestamp - last_publish_log_time);
+    spdlog::info("Pose publication frequency: {:.2f} Hz", freq);
+    last_publish_log_time = current_timestamp;
+    publish_count = 0;
+  }
+
   emit publish_message(final_pose.to_json());
 }
 

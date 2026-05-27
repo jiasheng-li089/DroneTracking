@@ -114,6 +114,7 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
             if (p.try_wait_for_frames(&frames,
                                       50)) {  // 50ms timeout to avoid busy wait
                 const bool log_frame = frames.get_frame_number() % 30 == 0;
+                const bool update_ui = frames.get_frame_number() % 3 == 0;
 
                 if (log_frame) {
                     spdlog::debug("Frameset received from cameraId: {}, serial: {}, frame #{}", cameraId, serial,
@@ -137,7 +138,7 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
 
                 rs2::video_frame color = processed_frames.get_color_frame();
 
-                if (color) {
+                if (update_ui && color) {
                     QImage img((const uchar*)color.get_data(), color.get_width(), color.get_height(),
                                color.get_stride_in_bytes(), QImage::Format_RGB888);
                     frame_data.emplace_back(cameraId, serial, img.copy());
@@ -149,7 +150,7 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
 
 #ifdef ENABLE_DEPTH_CAMERA
                 rs2::depth_frame depth = processed_frames.get_depth_frame();
-                if (depth) {
+                if (update_ui && depth) {
                     // Process depth frame if needed
                     QImage depthImg((const uchar*)depth.get_data(), depth.get_width(), depth.get_height(),
                                     depth.get_stride_in_bytes(), QImage::Format_Grayscale16);
@@ -166,7 +167,7 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
                 }
 
                 rs2::video_frame gray_frame = processed_frames.first(RS2_STREAM_INFRARED);
-                if (gray_frame) {
+                if (update_ui && gray_frame) {
                     QImage grayImg((const uchar*)gray_frame.get_data(), gray_frame.get_width(), gray_frame.get_height(),
                                    gray_frame.get_stride_in_bytes(), QImage::Format_Grayscale8);
                     frame_data.emplace_back(cameraId + 200, serial, grayImg.copy());
