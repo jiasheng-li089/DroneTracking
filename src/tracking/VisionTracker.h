@@ -1,13 +1,16 @@
 #pragma once
 
+#include <map>
+#include <opencv2/core/hal/interface.h>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/video/tracking.hpp>
 #include <spdlog/fmt/ranges.h>
 
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QObject>
-#include <mutex>
 #include <opencv2/opencv.hpp>
+#include <string>
 #include <unordered_map>
 
 #include "../common/common.h"
@@ -50,6 +53,13 @@ struct MarkerParameter; // Forward declaration
 
 class TrackerConfig;
 
+struct ComputationData {
+  int64 last_frame_time;
+  int64 last_computed_time;
+  ObjectPose computed_pose;
+  cv::KalmanFilter kf;
+};
+
 class VisionTracker : public QObject {
   Q_OBJECT
 public:
@@ -68,8 +78,6 @@ signals:
   void update_camera_status(std::string serial, std::string status);
 
 private:
-  cv::Mat preprocess_frame(const std::string &serial, const cv::Mat &frame);
-
   bool calibrate_camera(bool log, CameraParameters &cam_params,
                         std::vector<int> &marker_ids,
                         std::vector<cv::Vec3d> &rvecs,
@@ -85,12 +93,8 @@ private:
 
   std::unique_ptr<MarkerParameter> m_benchmark_parameter;
 
-  std::map<std::string, cv::Mat> m_cache_frames;
-  std::map<std::string, std::chrono::steady_clock::time_point>
-      m_last_frame_times;
+  std::map<std::string, ComputationData> m_computation_data;
 
-  std::map<std::string, ObjectPose>
-      m_latest_poses; // latest drone pose estimate per camera
-  std::mutex m_pose_mutex;
 };
+
 } // namespace tracking

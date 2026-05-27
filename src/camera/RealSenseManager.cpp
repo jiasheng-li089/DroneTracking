@@ -2,9 +2,9 @@
 
 #include <librealsense2/h/rs_sensor.h>
 
-#include <chrono>
 #include <librealsense2/rs.hpp>
 #include <thread>
+#include "config.h"
 
 RealSenseManager::RealSenseManager(QObject *parent)
     : CameraManager::CameraManager(parent) {}
@@ -97,19 +97,21 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
 
         rs2::frameset processed_frames = frames;
 
-        std::vector<std::tuple<int, std::string, QImage>> frame_data;
-
         rs2::video_frame color = processed_frames.get_color_frame();
 
         if (color) {
           cv::Mat image = cv::Mat(color.get_height(), color.get_width(),
                                   CV_8UC3, const_cast<void *>(color.get_data()),
-                                  color.get_stride_in_bytes());
-          emit frame_received(cameraId, serial, frames.get_frame_number(),
-                              image);
+                                  color.get_stride_in_bytes()).clone();
+                              
+#ifdef ENABLE_VIDEO_UPDATE
+          if (processed_frames.get_frame_number() % 3 == 0)
+            emit frame_received(cameraId, serial, processed_frames.get_frame_number(),
+                                image);
+#endif
 
           if (m_callback) {
-            m_callback(cameraId, serial, frames.get_frame_number(), image);
+            m_callback(cameraId, serial, processed_frames.get_frame_number(), image);
           }
           if (log_frame) {
             spdlog::debug("Color frame processed for cameraId: {}, serial: {}, "

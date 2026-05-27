@@ -11,6 +11,7 @@ option(SHOW_SINGLE_MARKER_POSE "Show the pose of a single marker for debugging" 
 option(ENABLE_STEREO_CALIBRATION "Enable stereo calibration mode" OFF)
 option(CALIBRATE_ONCE "Calibrate the camera once and then use the cached pose" ON)
 option(USE_REALSENSE_CAMERA "Use the realsense cameras" ON)
+option(ENABLE_VIDEO_UPDATE "If show video updates on GUI during tracking" ON)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
@@ -43,7 +44,7 @@ set(CMAKE_AUTOUIC ON)
 find_package(Qt6 COMPONENTS Core Gui Widgets WebSockets OpenGLWidgets REQUIRED)
 
 # Find the opencv components
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect videoio highgui)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d objdetect videoio video highgui)
 
 # LibDataChannel for WebRTC
 # We use FetchContent to integrate a lightweight C/C++ WebRTC library,

@@ -1,7 +1,12 @@
 #include "VisionTracker.h"
 
+#include <cstring>
+#include <opencv2/core.hpp>
+#include <opencv2/core/hal/interface.h>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/matx.hpp>
+#include <opencv2/core/types.hpp>
+#include <qtmetamacros.h>
 #include <spdlog/spdlog.h>
 
 #include <QImage>
@@ -9,8 +14,15 @@
 #include "TrackerConfig.h"
 #include "common/common.h"
 #include "config.h"
+#include "spdlog/fmt/bundled/format.h"
 
 namespace tracking {
+
+void update_measurement_matrix(cv::Mat& measurement_matrix, float dt) {
+  measurement_matrix.at<float>(0, 3) = dt;
+  measurement_matrix.at<float>(1, 4) = dt;
+  measurement_matrix.at<float>(2, 5) = dt;
+}
 
 VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config,
                              QObject *parent)
@@ -26,6 +38,37 @@ VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config,
     auto cam_params_vec = m_config->get_camera_calibration_parameters();
     for (const auto &param : cam_params_vec) {
       m_camera_parameters[param.serial] = param;
+
+      // initilize the computation data
+      ComputationData data;
+      data.kf.init(6, 3, 0, CV_32F);
+      data.last_computed_time = current_timestamp_ms();
+
+      // transition matrix (A)
+      data.kf.transitionMatrix = (cv::Mat_<float>(6, 6) <<
+        1, 0, 0, 1, 0, 0,
+        0, 1, 0, 0, 1, 0,
+        0, 0, 1, 0, 0, 1,
+        0, 0, 0, 1, 0, 0,
+        0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 1);
+      
+      // measurement matrix (H)
+      data.kf.measurementMatrix = cv::Mat::zeros(3, 6, CV_32F);
+      data.kf.measurementMatrix.at<float>(0, 0) = 1.0f;
+      data.kf.measurementMatrix.at<float>(1, 1) = 1.0f;
+      data.kf.measurementMatrix.at<float>(2, 2) = 1.0f;
+
+      // process noise covariance (Q)
+      cv::setIdentity(data.kf.processNoiseCov, cv::Scalar::all(1e-4));
+
+      // measurement noise covariance (R)
+      cv::setIdentity(data.kf.measurementNoiseCov, cv::Scalar::all(1e-4));
+      
+      // error covariance (P)
+      cv::setIdentity(data.kf.errorCovPost, cv::Scalar::all(1));
+
+      m_computation_data[param.serial] = data;
     }
 
     m_benchmark_parameter =
@@ -93,71 +136,56 @@ bool VisionTracker::calibrate_camera(bool log, CameraParameters &cam_params,
   auto tvec = tvecs[index];
 
   // The pose of the benchmark marker relative to the camera
-  cv::Mat R_benchmark_cam_pose = cv::Mat::eye(4, 4, CV_64F);
-  cv::Rodrigues(rvec, R_benchmark_cam_pose(cv::Rect(0, 0, 3, 3)));
-  cv::Mat(tvec).copyTo(R_benchmark_cam_pose(cv::Rect(3, 0, 1, 3)));
+  cv::Mat benchmark_cam_pose = cv::Mat::eye(4, 4, CV_64F);
+  cv::Rodrigues(rvec, benchmark_cam_pose(cv::Rect(0, 0, 3, 3)));
+  cv::Mat(tvec).copyTo(benchmark_cam_pose(cv::Rect(3, 0, 1, 3)));
 
-  cam_params.pose =
-      R_benchmark_cam_pose
-          .inv(); // Invert to get camera pose in benchmark marker frame
-
-  // extract rotation and translation from the camera pose
-  cv::Vec3d t = get_translation_from_pose(cam_params.pose);
-  cv::Vec3d r = get_rotation_from_pose_in_degrees(cam_params.pose);
+  // Invert to get camera pose in benchmark marker frame
+  cam_params.pose = benchmark_cam_pose.inv(); 
 
   if (log) {
+    // extract rotation and translation from the camera pose
+    cv::Vec3d t = get_translation_from_pose(cam_params.pose);
+    cv::Vec3d r = get_rotation_from_pose_in_degrees(cam_params.pose);
     spdlog::info("Camera {} orientation in world (deg): yaw = {:.2f} pitch = "
                  "{:.2f} roll = {:.2f}",
                  cam_params.serial, r[2], r[1], r[0]);
   }
 
-  // emit update_camera_status(
-  //     fmt::format("Camera #{}", cam_params.serial),
-  //     fmt::format("Calibrated: x = {:.2f}, y = {:.2f}, z = {:.2f}, "
-  //                 "yaw = {:.2f}, pitch = {:.2f}, roll = {:.2f}",
-  //                 t[0], t[1], t[2], r[2], r[1], r[0]));
-
   spdlog::info("Camera {} calibrated from benchmark marker {}",
-               cam_params.serial, m_benchmark_parameter->id);
+               cam_params.serial, marker_ids[index]);
   return true;
 }
 
 void VisionTracker::process_frames(const int camera_id,
                                    const std::string &serial,
                                    const ulong frame_id, const cv::Mat &frame) {
-  auto now = std::chrono::steady_clock::now();
-  auto &last = m_last_frame_times[serial];
-  double fps = 0.0;
-  if (last != std::chrono::steady_clock::time_point{}) {
-    double dt = std::chrono::duration<double>(now - last).count();
-    fps = (dt > 0.0) ? 1.0 / dt : 0.0;
-  }
-  last = now;
+  ComputationData &data = m_computation_data[serial];
+
+  auto last_time = data.last_frame_time;
+  auto current_timestamp = current_timestamp_ms();
+  data.last_frame_time = current_timestamp;
 
   auto log_enable = frame_id % 30 == 0;
 
-  if (log_enable)
+  if (log_enable && last_time > 0) {
     spdlog::debug(
-        "Received frames from cameraId ({}), frame number: {}, fps: {:.2f}",
-        serial, frame_id, fps);
+        "Received frame from camera ({}), frame number: {}, fps: {:.2f}",
+        serial, frame_id,
+        1000.0 / (data.last_frame_time - last_time));
+  }
 
   // check if the camera has detected the benchmark marker and calculate its
   // position and orientation in the world frame yet, if not, calibrate it first
-  CameraParameters *cam_params = nullptr;
-  auto it = m_camera_parameters.find(serial);
-  if (it != m_camera_parameters.end()) {
-    cam_params = &it->second;
-  }
+  CameraParameters &cam_params = m_camera_parameters[serial];
 
-  if (!cam_params || cam_params->K.empty() || cam_params->D.empty()) {
+  if (cam_params.K.empty() || cam_params.D.empty()) {
     if (log_enable)
       spdlog::warn("Camera parameters not found for serial: {}", serial);
     return;
   }
 
-  // obtain the position of the camera related to the benchmark marker if have
-  // not yet.
-  auto rgb_frame = preprocess_frame(serial, frame);
+  auto rgb_frame = frame;
   // detect the possible position of the target (aruco) related to the camera.
   std::vector<int> marker_ids;
   std::vector<std::vector<cv::Point2f>> marker_corners, rejected_candidates;
@@ -165,8 +193,10 @@ void VisionTracker::process_frames(const int camera_id,
   m_aruco_detector.detectMarkers(rgb_frame, marker_corners, marker_ids,
                                  rejected_candidates);
 
-  spdlog::debug("detected {} markers from cameraId ({}): [{}]",
-                marker_corners.size(), serial, fmt::join(marker_ids, ", "));
+  if (log_enable) {
+    spdlog::debug("detected {} markers from cameraId ({}): [{}]",
+                  marker_corners.size(), serial, fmt::join(marker_ids, ", "));
+  }
 
   // ignore all unknown markers for now, but log them for debugging
   std::vector<int> known_marker_ids;
@@ -196,12 +226,12 @@ void VisionTracker::process_frames(const int camera_id,
   for (size_t i = 0; i < size; ++i) {
     const auto &marker_param = known_marker_parameters[i];
     const auto &marker_corner = known_marker_corners[i];
-#define USE_GENERIC_SOLVE_PNP 1
+// #define USE_GENERIC_SOLVE_PNP 0
 #ifdef USE_GENERIC_SOLVE_PNP
     std::vector<cv::Mat> rvecs_out, tvecs_out;
     std::vector<double> reproj_errors;
-    cv::solvePnPGeneric(marker_param.obj_points, marker_corner, cam_params->K,
-                        cam_params->D, rvecs_out, tvecs_out, false,
+    cv::solvePnPGeneric(marker_param.obj_points, marker_corner, cam_params.K,
+                        cam_params.D, rvecs_out, tvecs_out, false,
                         cv::SOLVEPNP_IPPE_SQUARE, cv::noArray(), cv::noArray(),
                         reproj_errors);
 
@@ -212,63 +242,72 @@ void VisionTracker::process_frames(const int camera_id,
     rvecs.at(i) = rvecs_out.at(best_index);
     tvecs.at(i) = tvecs_out.at(best_index);
 
-    if (log_enable) {
-      spdlog::debug(
-          "Marker ID: {}, reprojection errors for different solutions: [{}], "
-          "selected solution index: {}, "
-          "rvec: [{:.2f}, {:.2f}, {:.2f}], tvec: [{:.2f}, {:.2f}, {:.2f}]",
-          known_marker_ids[i], fmt::join(reproj_errors, ", "), best_index,
-          rvecs.at(i)[0], rvecs.at(i)[1], rvecs.at(i)[2], tvecs.at(i)[0],
-          tvecs.at(i)[1], tvecs.at(i)[2]);
-    }
+    spdlog::debug(
+        "Marker ID: {}, reprojection errors for different solutions: [{}], "
+        "selected solution index: {}, "
+        "rvec: [{:.2f}, {:.2f}, {:.2f}], tvec: [{:.2f}, {:.2f}, {:.2f}]",
+        known_marker_ids[i], fmt::join(reproj_errors, ", "), best_index,
+        rvecs.at(i)[0], rvecs.at(i)[1], rvecs.at(i)[2], tvecs.at(i)[0],
+        tvecs.at(i)[1], tvecs.at(i)[2]);
 #else
     // solvePnP to get the relative position of the target (aruco) to the camera
-    cv::solvePnP(marker_param.obj_points, marker_corner, cam_params->K,
-                 cam_params->D, rvecs.at(i), tvecs.at(i), false,
+    cv::solvePnP(marker_param.obj_points, marker_corner, cam_params.K,
+                 cam_params.D, rvecs.at(i), tvecs.at(i), false,
                  cv::SOLVEPNP_IPPE_SQUARE);
 #endif
   }
 
-  // show detected markers on the image
-  std::vector<cv::Point2f> all_centers_2d(size);
   // generate a new image and mark the detected markers on the image, then emit
   // the signal to update the GUI
-  cv::Mat output_image = rgb_frame.clone();
-  for (size_t i = 0; i < size; ++i) {
-    std::vector<cv::Point3f> center_3d = {cv::Point3f(0, 0, 0)};
-    std::vector<cv::Point2f> center_2d;
-    cv::projectPoints(center_3d, rvecs.at(i), tvecs.at(i), cam_params->K,
-                      cam_params->D, center_2d);
-    all_centers_2d[i] = center_2d.at(0);
-    cv::circle(output_image, center_2d.at(0), 5, cv::Scalar(0, 255, 0), -1);
+  // OPTIMIZATION: Throttle GUI updates (e.g., 10 FPS / every 3 frames) to avoid heavy image copying
+#ifdef ENABLE_VIDEO_UPDATE
+  const bool update_gui = frame_id % 3 == 0;
+  if (update_gui) {
+    // show detected markers on the image
+    std::vector<cv::Point2f> all_centers_2d(size);
 
-    cv::aruco::drawDetectedMarkers(
-        output_image,
-        std::vector<std::vector<cv::Point2f>>{known_marker_corners[i]},
-        std::vector<int>{known_marker_ids[i]});
+    // calculate center points
+    for (size_t i = 0; i < size; ++i) {
+      std::vector<cv::Point3f> center_3d = {cv::Point3f(0, 0, 0)};
+      std::vector<cv::Point2f> center_2d;
+      cv::projectPoints(center_3d, rvecs.at(i), tvecs.at(i), cam_params.K,
+                        cam_params.D, center_2d);
+      all_centers_2d[i] = center_2d.at(0);
+    }
+
+    cv::Mat output_image = rgb_frame.clone();
+    for (size_t i = 0; i < size; ++i) {
+      cv::circle(output_image, all_centers_2d[i], 5, cv::Scalar(0, 255, 0), -1);
+      cv::aruco::drawDetectedMarkers(
+          output_image,
+          std::vector<std::vector<cv::Point2f>>{known_marker_corners[i]},
+          std::vector<int>{known_marker_ids[i]});
+    }
+    emit frame_received(camera_id + 200, serial, frame_id, output_image);
   }
-  emit frame_received(camera_id + 200, serial, frame_id, output_image);
+#endif
 
   if (known_marker_corners.empty() ||
       (known_marker_corners.size() == 1 &&
        known_marker_ids[0] == m_benchmark_parameter->id)) {
     // notify the GUI that current tracking status is "Lost"
-    spdlog::debug("No known markers detected from cameraId ({}), skipping "
-                  "pose estimation",
-                  serial);
+    if (log_enable)
+      spdlog::debug("No known markers detected from cameraId ({}), skipping "
+                    "pose estimation",
+                    serial);
     return;
   }
 
   // only start tracking when the camera position is known.
-  if (!cam_params->calibrated) {
-    emit update_camera_status(fmt::format("Camera #{}", cam_params->serial),
+  if (!cam_params.calibrated) {
+    emit update_camera_status(fmt::format("Camera #{}", cam_params.serial),
                               "Calibrating");
 
-    if (!calibrate_camera(log_enable, *cam_params, marker_ids, rvecs, tvecs)) {
+    if (!calibrate_camera(log_enable, cam_params, known_marker_ids, rvecs, tvecs)) {
       return;
     }
 #ifdef CALIBRATE_ONCE
-    cam_params->calibrated = true;
+    cam_params.calibrated = true;
 #endif
   }
 
@@ -312,7 +351,7 @@ void VisionTracker::process_frames(const int camera_id,
     // reliable, applying this offset may amplify the drift. Therefore, treat
     // the translation of the marker as the drone's translation directly.
     // Averaging multiple marker translations can help reduce the drift.
-    cv::Mat drone_world_pose = cam_params->pose * marker_camera_pose;
+    cv::Mat drone_world_pose = cam_params.pose * marker_camera_pose;
 
     if (known_marker_ids[i] != m_benchmark_parameter->id) {
 
@@ -320,7 +359,7 @@ void VisionTracker::process_frames(const int camera_id,
       // some offset around z axis can be applied to make the translation closer
       // to the drone's actual position.
       auto z_offset = drone_marker_pose.at<double>(3, 2);
-      drone_world_pose.at<double>(2, 3) += z_offset;
+      drone_world_pose.at<double>(3, 2) += z_offset;
       // skip the benchmark marker when calculating the drone pose,
       // since the benchmark marker is not attached to the drone and its
       // position is fixed in the world.
@@ -340,27 +379,22 @@ void VisionTracker::process_frames(const int camera_id,
                       "yaw = {:.2f}, pitch = {:.2f}, roll = {:.2f}",
                       pose.x, pose.y, pose.z, pose.yaw, pose.pitch, pose.roll));
 
-    // if (log_enable) {
-    double distance = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
-    spdlog::info(
-        "Marker ID: {}, camera: {}, pos (m): [{:.2f}, {:.2f}, {:.2f}], "
-        "dist: {:.3f} m, rot (deg) yaw = {:.2f} pitch = {:.2f} roll = {:.2f}",
-        known_marker_ids[i], serial, pose.x, pose.y, pose.z, distance, pose.yaw,
-        pose.pitch, pose.roll);
-
-#ifdef ENABLE_DEPTH_CAMERA
-    // detect the depth from the depth frame at the center of the marker and log
-    // it for debugging
-    auto depth_frame = frames.get_depth_frame();
-    if (depth_frame) {
-      float depth_value =
-          depth_frame.get_distance(static_cast<int>(all_centers_2d[i].x),
-                                   static_cast<int>(all_centers_2d[i].y));
-      spdlog::info("Depth value at marker center: {:.2f} m", depth_value);
+    if (log_enable) {
+      double distance = std::sqrt(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+      spdlog::info(
+          "Marker ID: {}, camera: {}, pos (m): [{:.2f}, {:.2f}, {:.2f}], "
+          "dist: {:.3f} m, rot (deg) yaw = {:.2f} pitch = {:.2f} roll = {:.2f}",
+          known_marker_ids[i], serial, pose.x, pose.y, pose.z, distance,
+          pose.yaw, pose.pitch, pose.roll);
     }
 #endif
-    // }
-#endif
+  }
+
+  if (drone_world_poses.size() <= 0) {
+    // all computed poses are invalid, stop sending pose to the controller
+    spdlog::warn("All computed poses are invalid, stop sending pose to the "
+                 "controller");
+    return;
   }
 
   cv::Vec3d avg_translation(0, 0, 0);
@@ -372,40 +406,64 @@ void VisionTracker::process_frames(const int camera_id,
   avg_translation /= static_cast<int>(drone_world_poses.size());
   avg_rotation /= static_cast<int>(drone_world_poses.size());
 
-  ObjectPose averaged_pose =
-      ObjectPose::from_t_and_r(avg_translation, avg_rotation);
+  // TODO need to apply kalman filter to the computed translation
+  float dt = (current_timestamp - data.last_computed_time) / 1000.0f;
+  update_measurement_matrix(data.kf.measurementMatrix, dt);
 
-  auto current_timestamp = current_timestamp_ms();
-  // store this camera's estimate and compute cross-camera average
-  {
-    std::lock_guard<std::mutex> lock(m_pose_mutex);
-    m_latest_poses[serial] = averaged_pose;
+  cv::Mat prediction = data.kf.predict();
+  cv::Mat estimation = data.kf.correct((cv::Mat_<float>(3, 1) <<
+    (float) avg_translation[0],
+    (float) avg_translation[1],
+    (float) avg_translation[2]
+  ));
 
-    cv::Vec3d t_sum(0, 0, 0);
-    cv::Vec3d r_sum(0, 0, 0);
-    double roll_sum = 0, pitch_sum = 0, yaw_sum = 0;
-    double n = static_cast<double>(m_latest_poses.size());
+  cv::Vec3d smoothed_translation(
+    estimation.at<float>(0, 0),
+    estimation.at<float>(1, 0),
+    estimation.at<float>(2, 0)
+  );
+  data.computed_pose = ObjectPose::from_t_and_r(smoothed_translation, avg_rotation);
+  data.last_computed_time = current_timestamp;
+  emit update_camera_status(
+    fmt::format("Drone_{}", serial),
+    fmt::format("x = {:.2f}, y = {:.2f}, z = {:.2f}", data.computed_pose.x, data.computed_pose.y, data.computed_pose.z)
+  );
 
-    for (const auto &[cam_serial, pose] : m_latest_poses) {
-      // the cached pose is too old, skip it
-      if (current_timestamp - pose.timestamp > 500) {
-        n--;
-        continue;
-      }
-      t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
-      r_sum += cv::Vec3d(pose.roll, pose.pitch, pose.yaw);
+  // only read operation for m_computation_data, not need to lock the data
+  cv::Vec3d t_sum(0, 0, 0);
+  cv::Vec3d r_sum(0, 0, 0);
+  double roll_sum = 0, pitch_sum = 0, yaw_sum = 0;
+  double n = static_cast<double>(m_computation_data.size());
+
+  for (auto &[cam_serial, tmp_data] : m_computation_data) {
+    ObjectPose &pose = tmp_data.computed_pose;
+    // the cached pose is too old, skip it
+    if (current_timestamp - pose.timestamp > 100) {
+      n--;
+      continue;
     }
-
-    cv::Vec3d t_avg = t_sum / n;
-    cv::Vec3d r_avg = r_sum / n;
-
-    ObjectPose final_pose = ObjectPose::from_t_and_r(t_avg, r_avg);
-    emit publish_message(final_pose.to_json());
+    t_sum += cv::Vec3d(pose.x, pose.y, pose.z);
+    r_sum += cv::Vec3d(pose.roll, pose.pitch, pose.yaw);
   }
+
+  cv::Vec3d t_avg = t_sum / n;
+  cv::Vec3d r_avg = r_sum / n;
+
+  ObjectPose final_pose = ObjectPose::from_t_and_r(t_avg, r_avg);
+  
+  // Compute and log pose publication frequency
+  static uint64_t last_publish_log_time = current_timestamp;
+  static int publish_count = 0;
+  
+  publish_count++;
+  if (current_timestamp - last_publish_log_time >= 1000) { // every 1000 ms
+    double freq = publish_count * 1000.0 / (current_timestamp - last_publish_log_time);
+    spdlog::info("Pose publication frequency: {:.2f} Hz", freq);
+    last_publish_log_time = current_timestamp;
+    publish_count = 0;
+  }
+
+  emit publish_message(final_pose.to_json());
 }
 
-cv::Mat VisionTracker::preprocess_frame(const std::string &serial,
-                                        const cv::Mat &frame) {
-  return frame.clone();
-}
 } // namespace tracking

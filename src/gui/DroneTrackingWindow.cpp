@@ -1,5 +1,6 @@
 #include "DroneTrackingWindow.h"
 
+#include <functional>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/matx.hpp>
 #include <qhashfunctions.h>
@@ -15,7 +16,6 @@
 
 #ifdef USE_REALSENSE_CAMERA
 #include "../camera/RealSenseManager.h"
-#else
 #include "../camera/GenericCamerManager.h"
 #endif
 #include "../common/common.h"
@@ -24,6 +24,7 @@
 #include "../tracking/TrackerConfig.h"
 #include "../tracking/VisionTracker.h"
 #include "CameraWidget.h"
+#include "config.h"
 
 DroneTrackingWindow::DroneTrackingWindow(std::string config_file,
                                          QWidget *parent)
@@ -158,6 +159,9 @@ void DroneTrackingWindow::on_button_clicked(QWidget *sender) {
   switch (sender->property("button_id").toInt()) {
   case 0:
     m_log_te->append("Start Camera button clicked");
+    m_camera_manager->set_frame_callback(std::bind(
+        &tracking::VisionTracker::process_frames, m_vision_tracker.get(),
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
     m_camera_manager->start_cameras();
     on_widget_status_update(m_start_camera_btn, false);
     on_widget_status_update(m_stop_camera_btn, true);
@@ -165,6 +169,7 @@ void DroneTrackingWindow::on_button_clicked(QWidget *sender) {
   case 1:
     m_log_te->append("Stop Camera button clicked");
     m_camera_manager->stop_cameras();
+    m_camera_manager->set_frame_callback(nullptr);
     on_widget_status_update(m_start_camera_btn, true);
     on_widget_status_update(m_stop_camera_btn, false);
     break;
@@ -186,17 +191,11 @@ void DroneTrackingWindow::on_webrtc_connection_state(bool connected) {
     m_log_te->append("WebRTC connection established");
     on_widget_status_update(m_start_tracking_btn, false);
     on_widget_status_update(m_stop_tracking_btn, true);
-
-    m_camera_manager->set_frame_callback(std::bind(
-        &tracking::VisionTracker::process_frames, m_vision_tracker.get(),
-        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
-        std::placeholders::_4));
     m_ping_timer->start(3000);
   } else {
     m_log_te->append("WebRTC connection lost");
     on_widget_status_update(m_start_tracking_btn, true);
     on_widget_status_update(m_stop_tracking_btn, false);
-    m_camera_manager->set_frame_callback(nullptr);
     m_ping_timer->stop();
   }
 }

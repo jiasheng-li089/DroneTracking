@@ -69,7 +69,6 @@ void GenericCameraManager::camera_worker_thread(
   ulong frame_id = 0;
   cv::Mat frame, bgr_frame;
   while (m_running) {
-    cv::Mat frame;
     cap >> frame;
     frame_id++;
     if (frame.empty()) {
