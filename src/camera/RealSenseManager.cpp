@@ -3,10 +3,10 @@
 #include <librealsense2/h/rs_sensor.h>
 #include <spdlog/spdlog.h>
 
-#include <chrono>
 #include <librealsense2/rs.hpp>
 
-#include "logger.h"
+#include "config.h"
+
 
 RealSenseManager::RealSenseManager(QObject* parent) : QObject(parent), m_running(false) {}
 
@@ -114,7 +114,12 @@ void RealSenseManager::camera_worker_thread(int cameraId, std::string serial) {
             if (p.try_wait_for_frames(&frames,
                                       50)) {  // 50ms timeout to avoid busy wait
                 const bool log_frame = frames.get_frame_number() % 30 == 0;
+
+#ifdef ENABLE_VIDEO_UPDATE
                 const bool update_ui = frames.get_frame_number() % 3 == 0;
+#else
+                const bool update_ui = false;
+#endif
 
                 if (log_frame) {
                     spdlog::debug("Frameset received from cameraId: {}, serial: {}, frame #{}", cameraId, serial,

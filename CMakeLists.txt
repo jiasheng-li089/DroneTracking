@@ -11,6 +11,7 @@ option(ENABLE_DEPTH "Enable the depth stream for tracking" OFF)
 option(SHOW_SINGLE_MARKER_POSE "Show the pose of a single marker for debugging" ON)
 option(ENABLE_STEREO_CALIBRATION "Enable stereo calibration mode" OFF)
 option(CALIBRATE_ONCE "Calibrate the camera once and then use the cached pose" ON)
+option(ENABLE_VIDEO_UPDATE "If show video updates on GUI during tracking" ON)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)

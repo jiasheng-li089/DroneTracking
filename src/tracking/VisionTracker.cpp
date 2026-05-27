@@ -268,7 +268,11 @@ void VisionTracker::process_frames(const int camera_id,
   // generate a new image and mark the detected markers on the image, then emit
   // the signal to update the GUI
   // OPTIMIZATION: Throttle GUI updates (e.g., 10 FPS / every 3 frames) to avoid heavy image copying
-  bool update_gui = frames.get_frame_number() % 3 == 0;
+#ifdef ENABLE_VIDEO_UPDATE
+  const bool update_gui = frames.get_frame_number() % 3 == 0;
+#else
+  const bool update_gui = false;
+#endif
   if (update_gui) {
     // show detected markers on the image
     std::vector<cv::Point2f> all_centers_2d(size);
