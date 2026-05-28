@@ -8,7 +8,7 @@
             "name": "(gdb) DroneTracking",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/DroneTracking_DroneTracking",
+            "program": "${workspaceFolder}/build/DroneTracking",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
@@ -35,7 +35,34 @@
             "name": "(gdb) PhotoCapture",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/DroneTracking_PhotoCapture",
+            "program": "${workspaceFolder}/build/PhotoCapture",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "linux": {
+                "MIMode": "gdb"
+            }
+        },
+        {
+            "name": "(gdb) Test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Test",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
