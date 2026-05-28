@@ -16,6 +16,7 @@
 
 #ifdef USE_REALSENSE_CAMERA
 #include "../camera/RealSenseManager.h"
+#else
 #include "../camera/GenericCamerManager.h"
 #endif
 #include "../common/common.h"
