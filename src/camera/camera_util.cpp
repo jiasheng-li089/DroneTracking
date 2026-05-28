@@ -84,12 +84,20 @@ CameraMeta get_camera_meta(int camera_id) {
         }
         frmival.index ++;
       }
+      std::sort(tmp.fps.begin(), tmp.fps.end(), std::greater<double>());
 
       supported_resolutions.push_back(tmp);
     }
     frmsize.index ++;
   }
   close(fd);
+  std::sort(supported_resolutions.begin(), supported_resolutions.end(),
+            [](const CameraResolution &a, const CameraResolution &b) {
+              if (a.width != b.width) {
+                return a.width > b.width;
+              }
+              return a.height > b.height;
+            });
 
   // read serial from camera
 
