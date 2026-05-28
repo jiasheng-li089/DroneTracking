@@ -13,7 +13,7 @@ public:
   void stop_cameras() override;
 
 private:
-  void camera_worker_thread(const int, const std::string);
+  void camera_worker_thread(const int, const std::string, int width = 1920, int height = 1080, int fps = 30);
 };
 
 } // namespace CameraManager

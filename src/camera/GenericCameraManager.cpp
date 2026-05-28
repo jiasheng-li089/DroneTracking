@@ -20,13 +20,20 @@ void GenericCameraManager::start_cameras() {
     return;
   spdlog::info("Starting GenericCameraManager...");
   m_running = true;
-  std::vector<int> camera_ids = detect_rgb_cameras();
-  for (int camera_id : camera_ids) {
-    std::string camera_name = "Camera " + std::to_string(camera_id);
+  std::vector<CameraMeta> camera_metas = get_all_camera_metas();
+  for (const auto &meta : camera_metas) {
+    if (meta.supported_resolutions.size() <= 0 || meta.supported_resolutions[0].fps.size() <= 0) {
+      spdlog::warn("Camera (id: {}, serial: {}) has no supported resolutions or fps, skipping...", meta.id, meta.serial);
+      continue;
+    }
+    int width = meta.supported_resolutions[0].width;
+    int height = meta.supported_resolutions[0].height;
+    int fps = static_cast<int>(meta.supported_resolutions[0].fps[0]);
+    spdlog::info("Start thread for camera (id: {}, serial: {}: using resolution {}x{} at {} fps", meta.id, meta.serial, width, height, fps);
     std::unique_ptr<std::thread> thread = std::make_unique<std::thread>(
-        &GenericCameraManager::camera_worker_thread, this, camera_id,
-        camera_name);
-    m_threads.insert_or_assign(camera_name, std::move(thread));
+        &GenericCameraManager::camera_worker_thread, this, meta.id,
+        meta.serial, width, height, fps);
+    m_threads.insert_or_assign(meta.serial, std::move(thread));
   }
 }
 
@@ -45,7 +52,7 @@ void GenericCameraManager::stop_cameras() {
 }
 
 void GenericCameraManager::camera_worker_thread(
-    const int camera_id, const std::string camera_serial) {
+    const int camera_id, const std::string camera_serial, int width, int height, int fps) {
   spdlog::info("Starting worker thread for camera {}, serial: {}", camera_id,
                camera_serial);
 
@@ -58,9 +65,9 @@ void GenericCameraManager::camera_worker_thread(
     return;
   }
 
-  cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
-  cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
-  cap.set(cv::CAP_PROP_FPS, 30);
+  cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
+  cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
+  cap.set(cv::CAP_PROP_FPS, fps);
 
   spdlog::info("Camera {} properties: width={}, height={}, fps={}", camera_id,
                cap.get(cv::CAP_PROP_FRAME_WIDTH),
