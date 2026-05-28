@@ -2,13 +2,15 @@
 
 #include <opencv2/opencv.hpp>
 #include <spdlog/spdlog.h>
+
+#include <fstream>
 #include <string>
-#include <sys/ioctl.h>
+#include <vector>
 
 #include <fcntl.h>
-#include <linux/videodev2.h>
 #include <unistd.h>
-#include <vector>
+#include <linux/videodev2.h>
+#include <sys/ioctl.h>
 
 std::vector<int> detect_rgb_cameras() {
   std::vector<int> rgb_cameras;
@@ -36,11 +38,23 @@ std::vector<int> detect_rgb_cameras() {
   return std::move(rgb_cameras);
 }
 
+std::string get_camera_serial(int camera_id) {
+  std::string camera_class_path = "/sys/class/video4linux/video" + std::to_string(camera_id) + "/device/../serial";
+  std::ifstream serial_file(camera_class_path);
+  if (serial_file.is_open()) {
+    std::string serial;
+    std::getline(serial_file, serial);
+    serial_file.close();
+    return serial;
+  }
+  return "";
+}
+
 CameraMeta get_camera_meta(int camera_id) {
   std::string camera_path = "/dev/video" + std::to_string(camera_id);
   int fd = open(camera_path.c_str(), O_RDONLY);
   if (-1 == fd) {
-    return CameraMeta{-1, camera_id, "", {}};
+    return CameraMeta{0, camera_id, "", {}};
   }
 
   struct v4l2_frmsizeenum frmsize;
@@ -62,7 +76,7 @@ CameraMeta get_camera_meta(int camera_id) {
         static_cast<int>(frmsize.discrete.height),
         {}
       };
-      while (ioctl(fd, V4L2_FRMIVAL_TYPE_DISCRETE) == 0) {
+      while (ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) == 0) {
         if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
           double fps = static_cast<double>(frmival.discrete.denominator) /
                        static_cast<double>(frmival.discrete.numerator);
@@ -79,5 +93,18 @@ CameraMeta get_camera_meta(int camera_id) {
 
   // read serial from camera
 
-  return CameraMeta{-1, camera_id, "", {}};
+  return CameraMeta{1, camera_id, get_camera_serial(camera_id), supported_resolutions};
+}
+
+std::vector<CameraMeta> get_camera_metas(std::vector<int> camera_ids) {
+  std::vector<CameraMeta> all_meta;
+  for (int id : camera_ids) {
+    all_meta.push_back(get_camera_meta(id));
+  }
+  return std::move(all_meta);
+}
+
+std::vector<CameraMeta> get_all_camera_metas() {
+  auto camera_ids = detect_rgb_cameras();
+  return get_camera_metas(camera_ids);
 }

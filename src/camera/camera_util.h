@@ -23,3 +23,5 @@ CameraMeta get_camera_meta(int camera_id);
 
 
 std::vector<CameraMeta> get_camera_metas(std::vector<int> camera_ids);
+
+std::vector<CameraMeta> get_all_camera_metas();
