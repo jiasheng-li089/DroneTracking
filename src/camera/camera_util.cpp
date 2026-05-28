@@ -25,10 +25,9 @@ std::vector<int> detect_rgb_cameras() {
     if (ioctl(fd, VIDIOC_QUERYCAP, &cap) == 0) {
       std::string name = (const char *)cap.card;
       std::string bus = (const char *)cap.bus_info;
-      spdlog::info("Found camera: {} on bus: {}", name, bus);
+      spdlog::info("Found camera {}: {} on bus: {}", i, name, bus);
 
-      if (name.find("Depth") == std::string::npos &&
-          name.find("IR") == std::string::npos) {
+      if (cap.device_caps & V4L2_CAP_VIDEO_CAPTURE) {
         rgb_cameras.push_back(i);
       }
     }

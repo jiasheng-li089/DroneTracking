@@ -118,12 +118,14 @@ set(TARGET_NAMES
     "CameraCalibration"
     "DroneTracking"
     "Test"
+    "Demo"
 )
 set(TARGET_MAINS
     "photo_capturer_main.cpp"
     "camera_calibration_main.cpp"
     "drone_tracking_main.cpp"
     "test_main.cpp"
+    "demo_main.cpp"
 )
 
 # Application Executable
