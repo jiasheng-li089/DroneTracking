@@ -190,12 +190,16 @@ void VisionTracker::process_frames(const int camera_id,
   std::vector<int> marker_ids;
   std::vector<std::vector<cv::Point2f>> marker_corners, rejected_candidates;
 
+  auto t_detect_start = current_timestamp_ms();
   m_aruco_detector.detectMarkers(rgb_frame, marker_corners, marker_ids,
                                  rejected_candidates);
+  auto t_detect_end = current_timestamp_ms();
 
   if (log_enable) {
-    spdlog::debug("detected {} markers from cameraId ({}): [{}]",
-                  marker_corners.size(), serial, fmt::join(marker_ids, ", "));
+    spdlog::debug("detected {} markers from cameraId ({}): [{}] | "
+                  "detectMarkers: {} ms ({}x{})",
+                  marker_corners.size(), serial, fmt::join(marker_ids, ", "),
+                  t_detect_end - t_detect_start, rgb_frame.cols, rgb_frame.rows);
   }
 
   // ignore all unknown markers for now, but log them for debugging
@@ -223,6 +227,7 @@ void VisionTracker::process_frames(const int camera_id,
 
   // compute the rvec and tvec for each known marker
   std::vector<cv::Vec3d> rvecs(size), tvecs(size);
+  auto t_pnp_start = current_timestamp_ms();
   for (size_t i = 0; i < size; ++i) {
     const auto &marker_param = known_marker_parameters[i];
     const auto &marker_corner = known_marker_corners[i];
@@ -256,12 +261,16 @@ void VisionTracker::process_frames(const int camera_id,
                  cv::SOLVEPNP_IPPE_SQUARE);
 #endif
   }
+  auto t_pnp_end = current_timestamp_ms();
+  if (log_enable)
+    spdlog::debug("solvePnP for {} markers from cameraId ({}): {} ms", size,
+                  serial, t_pnp_end - t_pnp_start);
 
   // generate a new image and mark the detected markers on the image, then emit
   // the signal to update the GUI
   // OPTIMIZATION: Throttle GUI updates (e.g., 10 FPS / every 3 frames) to avoid heavy image copying
 #ifdef ENABLE_VIDEO_UPDATE
-  const bool update_gui = frame_id % 3 == 0;
+  const bool update_gui = frame_id % 10 == 0;
   if (update_gui) {
     // show detected markers on the image
     std::vector<cv::Point2f> all_centers_2d(size);
@@ -275,15 +284,15 @@ void VisionTracker::process_frames(const int camera_id,
       all_centers_2d[i] = center_2d.at(0);
     }
 
-    cv::Mat output_image = rgb_frame.clone();
+    cv::cvtColor(rgb_frame, data.show_marker_frame, cv::COLOR_RGB2BGR); // Convert to BGR for display
     for (size_t i = 0; i < size; ++i) {
-      cv::circle(output_image, all_centers_2d[i], 5, cv::Scalar(0, 255, 0), -1);
+      cv::circle(data.show_marker_frame, all_centers_2d[i], 5, cv::Scalar(0, 255, 0), -1);
       cv::aruco::drawDetectedMarkers(
-          output_image,
+          data.show_marker_frame,
           std::vector<std::vector<cv::Point2f>>{known_marker_corners[i]},
           std::vector<int>{known_marker_ids[i]});
     }
-    emit frame_received(camera_id + 200, serial, frame_id, output_image);
+    emit frame_received(camera_id + 200, serial, frame_id, data.show_marker_frame);
   }
 #endif
 
@@ -461,6 +470,11 @@ void VisionTracker::process_frames(const int camera_id,
     spdlog::info("Pose publication frequency: {:.2f} Hz", freq);
     last_publish_log_time = current_timestamp;
     publish_count = 0;
+  }
+
+  if (log_enable) {
+    spdlog::info("Total processing time for this frame #{}: {} ms", frame_id,
+                 current_timestamp_ms() - current_timestamp);
   }
 
   emit publish_message(final_pose.to_json());

@@ -58,6 +58,7 @@ struct ComputationData {
   int64 last_computed_time;
   ObjectPose computed_pose;
   cv::KalmanFilter kf;
+  cv::Mat show_marker_frame;
 };
 
 class VisionTracker : public QObject {
