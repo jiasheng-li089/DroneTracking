@@ -68,7 +68,7 @@ VisionTracker::VisionTracker(std::shared_ptr<tracking::TrackerConfig> config,
       // error covariance (P)
       cv::setIdentity(data.kf.errorCovPost, cv::Scalar::all(1));
 
-      m_computation_data[param.serial] = data;
+      m_computation_data[param.serial] = std::move(data);
     }
 
     m_benchmark_parameter =

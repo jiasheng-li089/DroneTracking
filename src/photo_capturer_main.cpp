@@ -1,9 +1,11 @@
-#include "gui/PhotoCaptureWindow.h"
+#include "gui/AutoPhotoCaptureWindow.h"
 #include "logger.h"
 
 #include <QApplication>
 #include <QSurfaceFormat> // Required for configuring OpenGL Widget
 #include <QDir>
+#include <opencv2/core/types.hpp>
+#include <qdir.h>
 
 
 int main(int argc, char *argv[]) {
@@ -16,7 +18,22 @@ int main(int argc, char *argv[]) {
 
     QApplication a(argc, argv);
 
-    PhotoCaptureWindow w(QDir::currentPath().toStdString() + "/captured_photos");
+    QDir current = QDir::current();
+    if (!current.exists("photos")) {
+        current.mkdir("photos");
+    }
+    current.cd("photos"); 
+
+    auto camera_serial = "903223052137";
+    AutoPhotoCaptureWindowConfig config {
+        camera_serial,
+        cv::Size(10, 7),
+        25.0f,
+        current.absolutePath().toStdString(),
+        camera_serial
+    };
+
+    AutoPhotoCaptureWindow w(config, nullptr);
     w.show();
 
     return a.exec();

@@ -40,7 +40,7 @@ PhotoCaptureWindow::~PhotoCaptureWindow() = default;
 
 void PhotoCaptureWindow::setup_ui() {
   this->setWindowTitle("Drone Tracking Control");
-  this->resize(800, 600);
+  this->resize(1600, 1200);
 
   const auto centralWidget = new QWidget(this);
   const auto layout = new QVBoxLayout(centralWidget);
