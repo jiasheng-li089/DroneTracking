@@ -14,6 +14,7 @@ int main(int argc, char *argv[]) {
 
     QDir configDir = QDir::current();
     configDir.cdUp();
+    configDir.cd("configs");
     auto config_file_path = configDir.absoluteFilePath("camera_calibration_0507120400.yaml");
     spdlog::info("Config file path: {}", config_file_path.toStdString());
     DroneTrackingWindow window (config_file_path.toStdString());

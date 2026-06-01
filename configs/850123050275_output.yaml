@@ -1,0 +1,24 @@
+%YAML:1.0
+---
+cameras:
+   camera_850123050275:
+      pattern_cols: 10
+      pattern_rows: 7
+      square_size_mm: 25.
+      image_width: 1920
+      image_height: 1080
+      valid_pairs: 54
+      intrinsic_matrix: !!opencv-matrix
+         rows: 3
+         cols: 3
+         dt: d
+         data: [ 1358.480566612337, 0., 973.87488192305545, 0.,
+             1358.480566612337, 530.76512687527793, 0., 0., 1. ]
+      distortion: !!opencv-matrix
+         rows: 1
+         cols: 5
+         dt: d
+         data: [ 0.20240090769160665, -0.66659764900543195,
+             -0.0033902256149846472, 0.00053349276132191349,
+             0.6435842102902708 ]
+      reproject_error: 1.0244921151787967
