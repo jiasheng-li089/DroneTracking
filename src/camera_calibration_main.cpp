@@ -24,6 +24,7 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/core/persistence.hpp>
 #include <opencv2/core/types.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -31,6 +32,60 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+struct CameraCalibrationConfig {
+  std::string serial;
+  cv::Size chessboard_size;
+  float square_size_mm;
+  std::vector<std::string> photos;
+};
+
+// ------------------------------
+// yaml parsing
+// ------------------------------
+static std::map<std::string, CameraCalibrationConfig>
+YamlParseConfig(const std::string &path) {
+  cv::FileStorage fs(path, cv::FileStorage::READ);
+  std::map<std::string, CameraCalibrationConfig> configs;
+
+  if (fs.isOpened()) {
+    cv::FileNode cameras_node = fs["cameras"];
+    if (!cameras_node.empty() && cameras_node.isMap()) {
+      for (auto it = cameras_node.begin(); it != cameras_node.end(); ++it) {
+        CameraCalibrationConfig config;
+        std::string node_name = (*it).name();
+
+        // Extract serial from node name (e.g. "camera_903223052137" ->
+        // "903223052137")
+        if (node_name.find("camera_") == 0) {
+          config.serial = node_name.substr(7);
+        } else {
+          config.serial = node_name;
+        }
+
+        int cols = 0, rows = 0;
+        (*it)["pattern_cols"] >> cols;
+        (*it)["pattern_rows"] >> rows;
+        config.chessboard_size = cv::Size(cols, rows);
+
+        (*it)["square_size_mm"] >> config.square_size_mm;
+
+        cv::FileNode photos_node = (*it)["photos"];
+        if (!photos_node.empty() && photos_node.isSeq()) {
+          for (auto pt = photos_node.begin(); pt != photos_node.end(); ++pt) {
+            std::string photo_path;
+            *pt >> photo_path;
+            config.photos.push_back(photo_path);
+          }
+        }
+
+        configs[config.serial] = config;
+      }
+    }
+  }
+
+  return configs;
+}
 
 // ---------------------------------------------------------------------------
 // XML parsing
@@ -83,15 +138,10 @@ ParseConfig(const std::string &config_path) {
 struct Args {
   std::string config_path;
   std::string output_path;
-  int pattern_cols = 9;      // inner corners along X
-  int pattern_rows = 6;      // inner corners along Y
-  double square_size = 25.0; // mm
 };
 
 static void PrintUsage(const char *prog) {
-  std::cerr << "Usage: " << prog << " --config <xml> --output <yaml>"
-            << " [--pattern-cols N] [--pattern-rows N]"
-            << " [--square-size mm]\n";
+  std::cerr << "Usage: " << prog << " --config <xml> --output <yaml>\n";
 }
 
 static Args ParseArgs(int argc, char *argv[]) {
@@ -107,12 +157,6 @@ static Args ParseArgs(int argc, char *argv[]) {
       a.config_path = next();
     else if (arg == "--output")
       a.output_path = next();
-    else if (arg == "--pattern-cols")
-      a.pattern_cols = std::stoi(next());
-    else if (arg == "--pattern-rows")
-      a.pattern_rows = std::stoi(next());
-    else if (arg == "--square-size")
-      a.square_size = std::stod(next());
     else {
       std::cerr << "Unknown argument: " << arg << "\n";
     }
@@ -161,16 +205,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // ------------------------------------------------------------------
-  // Load photo paths from XML
-  // ------------------------------------------------------------------
-  std::map<std::string, std::vector<std::string>> camera_photos;
-  try {
-    camera_photos = ParseConfig(args.config_path);
-  } catch (const std::exception &e) {
-    std::cerr << "Config error: " << e.what() << "\n";
-    return 1;
-  }
+  // load configuration from yaml file
+  auto configs = YamlParseConfig(args.config_path);
 
   std::vector<std::string> camera_serials;
   std::vector<int> valid_pairs;
@@ -179,30 +215,31 @@ int main(int argc, char *argv[]) {
   std::vector<cv::Mat> distortions;
   std::vector<cv::Size> image_sizes;
 
-  // ------------------------------------------------------------------
-  // Build object-point template (the same for every view)
-  // ------------------------------------------------------------------
-  cv::Size pattern_size(args.pattern_cols, args.pattern_rows);
+  for (auto [key, value] : configs) {
+    std::cout << "Start calibrating camera #" << key << " with "
+              << value.photos.size() << " images" << std::endl;
 
-  std::vector<cv::Point3f> obj_template;
-  obj_template.reserve(args.pattern_cols * args.pattern_rows);
-  for (int r = 0; r < args.pattern_rows; ++r) {
-    for (int c = 0; c < args.pattern_cols; ++c) {
-      obj_template.emplace_back(static_cast<float>(c * args.square_size),
-                                static_cast<float>(r * args.square_size), 0.0f);
+    // ------------------------------------------------------------------
+    // Build object-point template (the same for every view)
+    // ------------------------------------------------------------------
+    cv::Size pattern_size(value.chessboard_size.width, value.chessboard_size.height);
+
+    std::vector<cv::Point3f> obj_template;
+    obj_template.reserve(pattern_size.width * pattern_size.height);
+    for (int r = 0; r < pattern_size.height; ++r) {
+      for (int c = 0; c < pattern_size.width; ++c) {
+        obj_template.emplace_back(static_cast<float>(c * value.square_size_mm),
+                                  static_cast<float>(r * value.square_size_mm), 0.0f);
+      }
     }
-  }
 
-  for (auto [key, value] : camera_photos) {
-    std::cout << "Start calibrating camera #" << key << " with " << value.size()
-              << " images" << std::endl;
     std::vector<std::vector<cv::Point3f>> object_points;
     std::vector<std::vector<cv::Point2f>> image_points;
     int valid_pair = 0;
     cv::Size image_size;
 
-    for (size_t i = 0; i < value.size(); i++) {
-      cv::Mat image = cv::imread(value[i], cv::IMREAD_GRAYSCALE);
+    for (size_t i = 0; i < value.photos.size(); i++) {
+      cv::Mat image = cv::imread(value.photos[i], cv::IMREAD_GRAYSCALE);
       if (image.empty()) {
         continue;
       }
@@ -244,21 +281,6 @@ int main(int argc, char *argv[]) {
     image_sizes.push_back(image_size);
   }
 
-  auto it = camera_photos.begin();
-  const std::string serial1 = it->first;
-  const std::vector<std::string> paths1 = it->second;
-  ++it;
-  const std::string serial2 = it->first;
-  const std::vector<std::string> paths2 = it->second;
-
-  std::cout << "Camera 1  serial=" << serial1 << "  images=" << paths1.size()
-            << "\n";
-  std::cout << "Camera 2  serial=" << serial2 << "  images=" << paths2.size()
-            << "\n";
-  std::cout << "Chessboard pattern: " << args.pattern_cols << "x"
-            << args.pattern_rows << "  square=" << args.square_size
-            << " mm\n\n";
-
   // ------------------------------------------------------------------
   // Save results
   // ------------------------------------------------------------------
@@ -268,16 +290,16 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  fs << "pattern_cols" << args.pattern_cols;
-  fs << "pattern_rows" << args.pattern_rows;
-  fs << "square_size_mm" << args.square_size;
-
   fs << "cameras" << "{";
 
   for (size_t i = 0; i < camera_serials.size(); i++) {
     cv::Size image_size = image_sizes[i];
-    fs << camera_serials[i] << "{";
+    fs << "camera_" + camera_serials[i] << "{";
     {
+      auto& camera_config = configs[camera_serials[i]];
+      fs << "pattern_cols" << camera_config.chessboard_size.width;
+      fs << "pattern_rows" << camera_config.chessboard_size.height;
+      fs << "square_size_mm" << camera_config.square_size_mm;
       fs << "image_width" << image_size.width;
       fs << "image_height" << image_size.height;
       fs << "valid_pairs" << valid_pairs[i];
